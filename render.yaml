@@ -96,10 +96,6 @@ services:
         value: "false"
 
       # Solo se usan al correr el seed una vez (prisma db seed); se pueden borrar después.
-      - key: SEED_SUPERADMIN_EMAIL
-        sync: false
-      - key: SEED_SUPERADMIN_PASSWORD
-        sync: false
       - key: SEED_ADMIN_EMAIL
         sync: false
       - key: SEED_ADMIN_PASSWORD

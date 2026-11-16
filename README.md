@@ -82,7 +82,7 @@ backend-easydry/
    | Seguridad | `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_EXPIRATION` | **Obligatorias en producción**: el servidor no arranca sin ellas. Los valores de la plantilla son solo de desarrollo. |
    | Red | `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `TRUST_PROXY`, `COOKIE_SAMESITE` | `CORS_ORIGIN` debe incluir el dominio del panel (también lo valida el WebSocket). El refresh token del navegador va en una cookie HttpOnly; con web y API en dominios distintos usa `COOKIE_SAMESITE=none` (HTTPS). |
    | Almacenamiento | `AWS_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_S3_PUBLIC_URL_PREFIX`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT` | S3 es obligatorio (sin respaldo local). En AWS usa un IAM Role y deja vacías las dos claves. |
-   | Seed | `SEED_SUPERADMIN_EMAIL/PASSWORD`, `SEED_ADMIN_EMAIL/PASSWORD` | Obligatorias, sin valores por defecto. Las contraseñas cumplen la política (10+ caracteres, mayúscula, minúscula, número y especial). |
+   | Seed | `SEED_ADMIN_EMAIL/PASSWORD` | Opcionales (sin `SEED_ADMIN_EMAIL` no se crea el Admin). El Super Admin lo crea `prisma:cargar-excels`, no el seed. Las contraseñas cumplen la política (10+ caracteres, mayúscula, minúscula, número y especial). |
    | Importación | `IMPORT_PASSWORD_INICIAL` | Contraseña inicial de los usuarios nuevos del Excel. |
    | Archivado | `ARCHIVADO_ACTIVO`, `ARCHIVADO_SIMULACRO` | Ver *Archivado histórico*. |
    | Swagger | `SWAGGER_ENABLED` | Apagado en producción salvo que se active a propósito. |
