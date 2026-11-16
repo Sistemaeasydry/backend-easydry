@@ -362,8 +362,18 @@ export class ServiciosEspecialesService {
       Object.keys(rangoFechas).length ? { createdAt: rangoFechas } : undefined,
       busqueda,
     );
+    // «Cancelado»: un servicio anulado queda con `deletedAt` (la sincronización lo retira del teléfono), pero sigue siendo un registro
+    // consultable. Solo cuando se pide ese estado se quita el filtro de eliminados; «Todos» y el resumen por estado no lo incluyen.
+    const soloAnulados = String(query.estado ?? '').trim().toLowerCase() === 'cancelado';
+    const { deletedAt: _eliminados, ...whereSinEliminados } = whereSinEstado;
     const whereFinal = combinarWhere(
-      whereBase,
+      soloAnulados
+        ? combinarWhere(
+            whereSinEliminados,
+            Object.keys(rangoFechas).length ? { createdAt: rangoFechas } : undefined,
+            busqueda,
+          )
+        : whereBase,
       estadoFiltrado !== undefined ? { estado: estadoFiltrado } : undefined,
     );
 
@@ -419,7 +429,23 @@ export class ServiciosEspecialesService {
     const items = archivado && especialesArchivo ? especialesArchivo.mezclar(itemsBase as any[], archivado.filas, campoOrden, dirOrden, skip, take) : itemsBase;
     const total = totalBase + (archivado?.total ?? 0);
 
-    const formatted = items.map((i) => this._formatItem(i));
+    let formatted = items.map((i) => this._formatItem(i));
+    // El servicio especial no guarda quién lo anuló: se toma del registro de decisiones (la última anulación de cada uno).
+    const anulados = items.filter((i: any) => i.deletedAt).map((i: any) => i.id as string);
+    if (anulados.length) {
+      const decisiones = await this.prisma.auditoriaDecision.findMany({
+        where: { entidad: 'SERVICIO_ESPECIAL', accion: 'ANULAR', entidadId: { in: anulados } },
+        orderBy: { createdAt: 'desc' },
+      });
+      const porServicio = new Map<string, (typeof decisiones)[number]>();
+      for (const d of decisiones) if (!porServicio.has(d.entidadId)) porServicio.set(d.entidadId, d);
+      formatted = formatted.map((f: any) => {
+        const d = porServicio.get(f.id);
+        return d
+          ? { ...f, anuladoPorNombre: d.usuarioNombre, anuladoEn: d.createdAt.toISOString(), motivoAnulacion: d.motivo ?? null }
+          : f;
+      });
+    }
     const respuesta: Record<string, unknown> = {
       ...buildDataGridResponse(formatted, total, page, pageSize),
     };

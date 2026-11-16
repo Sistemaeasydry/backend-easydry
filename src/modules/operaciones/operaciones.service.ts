@@ -224,8 +224,12 @@ export class OperacionesService {
     // Estado aparte: el resumen por estado usa los mismos filtros pero sin el de estado.
     const { estado: estadoFiltrado, aprobadoPor: aprobadoPorFiltrado, ...whereSinEstado } = where;
     const whereBase = combinarWhere(whereSinEstado, ...extra, busqueda);
+    // «Anuladas»: una OT anulada queda con `deletedAt` (así la sincronización la retira del teléfono), pero sigue siendo un registro
+    // consultable. Solo cuando se pide ese estado se quita el filtro de eliminadas; «Todos» y el resumen por estado no la incluyen.
+    const soloAnuladas = estadoFiltrado === ServiceStatus.CANCELADO;
+    const { deletedAt: _eliminadas, ...whereSinEliminadas } = whereSinEstado;
     const whereFinal = combinarWhere(
-      whereBase,
+      soloAnuladas ? combinarWhere(whereSinEliminadas, ...extra, busqueda) : whereBase,
       estadoFiltrado !== undefined || aprobadoPorFiltrado !== undefined
         ? {
             ...(estadoFiltrado !== undefined ? { estado: estadoFiltrado } : {}),
@@ -300,6 +304,13 @@ export class OperacionesService {
           puedeDecidir: this.decisiones.puedeDecidirAhora(currentUser, { id: agencia?.id, regionId: agencia?.regionId }, tiene),
         };
       });
+    }
+    // A las anuladas se les agrega el nombre de quien las anuló (la fila solo guarda su id).
+    const anuladores = [...new Set(serializados.map((s) => s.anuladoPorId).filter(Boolean))] as string[];
+    if (anuladores.length) {
+      const usuarios = await this.prisma.user.findMany({ where: { id: { in: anuladores } }, select: { id: true, name: true, lastname: true } });
+      const nombres = new Map(usuarios.map((u) => [u.id, `${u.name || ''} ${u.lastname || ''}`.trim()]));
+      serializados = serializados.map((s) => (s.anuladoPorId ? { ...s, anuladoPorNombre: nombres.get(s.anuladoPorId) || null } : s));
     }
     const respuesta: Record<string, unknown> = { ...buildDataGridResponse(serializados, total, page, pageSize) };
 
