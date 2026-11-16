@@ -95,7 +95,7 @@ interface Ctx {
 const nombreDe = (u?: { name?: string | null; lastname?: string | null } | null): string => (u ? `${u.name ?? ''} ${u.lastname ?? ''}`.trim() : '');
 const titulo = (s?: string | null): string => (s ? `${s.charAt(0).toUpperCase()}${s.slice(1).toLowerCase().replace(/_/g, ' ')}` : '');
 /** Reportes que puede sacar el aprobador: solo los de sus servicios. */
-const REPORTES_DEL_APROBADOR = ['servicios-lavado'];
+const REPORTES_DEL_APROBADOR = ['servicios-lavado', 'servicios-generales-anulados', 'servicios-especiales-anulados'];
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 const dinero = (v: unknown): number | null => (v === null || v === undefined ? null : Math.round(Number(v) * 100) / 100);
@@ -389,6 +389,8 @@ export class ReportesService {
       case 'agencias-listado': return this.agenciasListado(ctx);
       case 'lavadores-listado': return this.lavadoresListado(ctx);
       case 'servicios-lavado': return this.serviciosLavado(ctx);
+      case 'servicios-generales-anulados': return this.serviciosGeneralesAnulados(ctx);
+      case 'servicios-especiales-anulados': return this.serviciosEspecialesAnulados(ctx);
       case 'catalogo-precios': return this.catalogoPrecios(ctx);
       case 'maquinaria-asignada': return this.maquinariaAsignada(ctx);
       case 'incidentes': return this.incidentes(ctx);
@@ -655,6 +657,96 @@ export class ReportesService {
           realizado: marcaServicioEspecial(s.estado),
           aprobado,
           aprobadoPor: decision?.usuarioNombre ?? '',
+          precio: dinero(s.precio),
+        },
+      };
+    });
+  }
+
+  /** Quién, con qué regla y por qué se anuló cada servicio, según el registro de decisiones (la última anulación de cada uno). */
+  private async anulacionesDe(entidad: 'SERVICIO_LAVADO' | 'SERVICIO_ESPECIAL', ids: string[]) {
+    const decisiones = ids.length
+      ? await this.prisma.auditoriaDecision.findMany({
+          where: { entidad, accion: 'ANULAR', entidadId: { in: ids } },
+          select: { entidadId: true, usuarioNombre: true, regla: true, motivo: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+    return new Map(decisiones.map((d) => [d.entidadId, d]));
+  }
+
+  private reglaAnulacion(regla?: string | null): string {
+    if (regla === 'TITULAR') return 'Aprobador titular';
+    if (regla === 'RESPALDO') return 'Respaldo';
+    if (regla === 'ADMIN') return 'Administrador';
+    return '';
+  }
+
+  private async serviciosGeneralesAnulados(ctx: Ctx): Promise<Bruta[]> {
+    const filas = await this.prisma.servicioLavado.findMany({
+      where: { deletedAt: { gte: ctx.gte, lt: ctx.lt }, estado: 'CANCELADO' as any, bahia: { agenciaId: { in: ctx.ids } } },
+      select: {
+        id: true, ordenTrabajoOT: true, placa: true, precio: true, horaIngreso: true, deletedAt: true, anuladoPorId: true, motivoAnulacion: true,
+        bahia: { select: { agenciaId: true } },
+        catalogo: { select: { nombre: true } },
+        operador: { select: { name: true, lastname: true } },
+        operadoresAsignados: { select: { operador: { select: { name: true, lastname: true } } } },
+      },
+      orderBy: { deletedAt: 'asc' },
+    });
+    const decisiones = await this.anulacionesDe('SERVICIO_LAVADO', filas.map((f) => f.id));
+    const anuladorIds = unicos(filas.map((f) => f.anuladoPorId));
+    const usuarios = anuladorIds.length ? await this.prisma.user.findMany({ where: { id: { in: anuladorIds } }, select: { id: true, name: true, lastname: true } }) : [];
+    const nombreAnulador = new Map(usuarios.map((u) => [u.id, nombreDe(u)]));
+    return filas.map((s) => {
+      const d = decisiones.get(s.id);
+      const asignados = s.operadoresAsignados.map((o) => nombreDe(o.operador)).filter(Boolean);
+      return {
+        grupo: s.bahia.agenciaId,
+        fecha: fechaEcuador(s.deletedAt!),
+        fila: {
+          fecha: fechaEcuador(s.deletedAt!),
+          hora: horaEcuador(s.deletedAt!),
+          ot: s.ordenTrabajoOT ?? '',
+          placa: s.placa,
+          servicio: s.catalogo?.nombre ?? '',
+          creacion: fechaEcuador(s.horaIngreso),
+          lavador: asignados.length ? asignados.join(', ') : nombreDe(s.operador),
+          anuladoPor: d?.usuarioNombre || (s.anuladoPorId ? nombreAnulador.get(s.anuladoPorId) : '') || '',
+          regla: this.reglaAnulacion(d?.regla),
+          motivo: d?.motivo || s.motivoAnulacion || '',
+          precio: dinero(s.precio),
+        },
+      };
+    });
+  }
+
+  private async serviciosEspecialesAnulados(ctx: Ctx): Promise<Bruta[]> {
+    const filas = await this.prisma.servicioEspecial.findMany({
+      where: { deletedAt: { gte: ctx.gte, lt: ctx.lt }, estado: { equals: 'Cancelado', mode: 'insensitive' }, agenciaId: { in: ctx.ids } },
+      select: { id: true, codigoSE: true, ordenTrabajoOT: true, tipoServicio: true, operadorId: true, placa: true, precio: true, agenciaId: true, createdAt: true, deletedAt: true },
+      orderBy: { deletedAt: 'asc' },
+    });
+    const decisiones = await this.anulacionesDe('SERVICIO_ESPECIAL', filas.map((f) => f.id));
+    const operadorIds = unicos(filas.map((f) => f.operadorId));
+    const pulidores = operadorIds.length ? await this.prisma.user.findMany({ where: { id: { in: operadorIds } }, select: { id: true, name: true, lastname: true } }) : [];
+    const pulidorDe = new Map(pulidores.map((u) => [u.id, nombreDe(u)]));
+    return filas.map((s) => {
+      const d = decisiones.get(s.id);
+      return {
+        grupo: s.agenciaId!,
+        fecha: fechaEcuador(s.deletedAt!),
+        fila: {
+          fecha: fechaEcuador(s.deletedAt!),
+          hora: horaEcuador(s.deletedAt!),
+          ot: s.ordenTrabajoOT || s.codigoSE,
+          placa: s.placa,
+          servicio: s.tipoServicio,
+          creacion: fechaEcuador(s.createdAt),
+          pulidor: s.operadorId ? (pulidorDe.get(s.operadorId) ?? '') : '',
+          anuladoPor: d?.usuarioNombre ?? '',
+          regla: this.reglaAnulacion(d?.regla),
+          motivo: d?.motivo ?? '',
           precio: dinero(s.precio),
         },
       };

@@ -51,7 +51,7 @@ describe('catálogo según los módulos activos del rol', () => {
 
   it('SUPER_ADMIN ve todos los reportes', () => {
     const { servicio } = crear();
-    expect(servicio.catalogo(usuario('SUPER_ADMIN', 'GLOBAL', []))).toHaveLength(18);
+    expect(servicio.catalogo(usuario('SUPER_ADMIN', 'GLOBAL', []))).toHaveLength(20);
   });
 });
 
@@ -355,9 +355,9 @@ describe('reportes del aprobador: solo sus servicios y solo 30 días atrás', ()
   const hoy = () => new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
   const haceDias = (n: number) => new Date(Date.now() - 5 * 3_600_000 - n * 86_400_000).toISOString().slice(0, 10);
 
-  it('el catálogo solo trae los reportes de servicios generales y especiales', () => {
+  it('el catálogo solo trae los reportes de servicios generales y especiales (con sus anulaciones)', () => {
     const { servicio } = crear();
-    expect(servicio.catalogo(aprobador).map((r) => r.id).sort()).toEqual(['servicios-lavado']);
+    expect(servicio.catalogo(aprobador).map((r) => r.id).sort()).toEqual(['servicios-especiales-anulados', 'servicios-generales-anulados', 'servicios-lavado']);
   });
 
   it('no puede sacar otro reporte aunque su permiso lo permitiría (precios del catálogo)', async () => {

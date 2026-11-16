@@ -118,6 +118,30 @@ export function columnasServicios(categoria: CategoriaServicios): ColumnaDef[] {
   return comunes([col('tipo', 'Tipo', 'texto', 9)], [col('lavador', 'Lavador / Pulidor', 'texto', 14), col('asesor', 'Asesor', 'texto', 13)]);
 }
 
+
+/** Columnas de los reportes de anulaciones (generales y especiales): lo único que cambia es quién ejecutó el servicio. */
+function columnasAnulados(persona: ColumnaDef[]): ColumnaDef[] {
+  return [
+    ORD,
+    col('fecha', 'Fecha de anulación', 'fecha', 11),
+    col('hora', 'Hora', 'hora', 8),
+    col('ot', 'OT', 'texto', 11),
+    col('placa', 'Placa', 'texto', 10),
+    col('servicio', 'Tipo de servicio', 'texto', 14),
+    col('creacion', 'Creada el', 'fecha', 10),
+    ...persona,
+    col('anuladoPor', 'Anulado por', 'texto', 15),
+    col('regla', 'Regla', 'texto', 11),
+    col('motivo', 'Motivo', 'texto', 26),
+    col('precio', 'Precio', 'dinero', 9, { soloPrecios: true }),
+  ];
+}
+
+const totalesAnulados = (filas: FilaReporte[]): TotalReporte[] => [
+  { clave: 'total', etiqueta: 'Servicios anulados', valor: filas.length, tipo: 'numero' },
+  { clave: 'monto', etiqueta: 'Monto anulado', valor: sumar(filas, 'precio'), tipo: 'dinero' },
+];
+
 export const REPORTES: readonly ReporteDef[] = [
   {
     id: 'agencias-listado',
@@ -175,6 +199,32 @@ export const REPORTES: readonly ReporteDef[] = [
     estados: [...ESTADOS_SERVICIO, ...ESTADOS_ESPECIAL.filter((e) => !ESTADOS_SERVICIO.some((g) => g.valor === e.valor))],
     columnas: columnasServicios('AMBOS'),
     totales: totalesServicios,
+  },
+  {
+    id: 'servicios-generales-anulados',
+    nombre: 'Servicios generales anulados',
+    modulo: 'Servicios de lavado',
+    descripcion: 'OT de lavado anuladas en el periodo: cuándo, quién las anuló, con qué regla y por qué. El periodo es el de la anulación.',
+    permisos: ['servicios.ver'],
+    periodo: true,
+    agrupar: 'AGENCIA',
+    plantilla: 'TABLA',
+    extras: [],
+    columnas: columnasAnulados([col('lavador', 'Lavador', 'texto', 13)]),
+    totales: totalesAnulados,
+  },
+  {
+    id: 'servicios-especiales-anulados',
+    nombre: 'Servicios especiales anulados',
+    modulo: 'Servicios de lavado',
+    descripcion: 'Servicios especiales anulados en el periodo: cuándo, quién los anuló, con qué regla y por qué. El periodo es el de la anulación.',
+    permisos: ['especiales.ver'],
+    periodo: true,
+    agrupar: 'AGENCIA',
+    plantilla: 'TABLA',
+    extras: [],
+    columnas: columnasAnulados([col('pulidor', 'Pulidor', 'texto', 13)]),
+    totales: totalesAnulados,
   },
   {
     id: 'catalogo-precios',
