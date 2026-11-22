@@ -8,6 +8,7 @@ import { FUNCION, tieneFuncion } from '../../common/permisos/funciones.js';
 import { tienePermiso } from '../../common/permisos/capacidades.js';
 import type { AdjuntoTareaDto, CancelarTareaDto, CompletarTareaDto, CrearTareaDto, ListarTareasDto, ReasignarTareaDto, RevisarTareaDto } from './dto/rrhh.dto.js';
 import { MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, NUMERO_TAREA, personaEnAlcance, tareaVencida, whereUsuariosEnAlcance } from './rrhh.reglas.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 const AMBITO_PERSONA = { agenciaId: true, regionId: true, agencia: { select: { nombre: true, regionId: true } }, bodega: { select: { regionId: true } } } as const;
 
@@ -20,7 +21,7 @@ const INCLUIR_TAREA = {
 
 type TareaCompleta = Prisma.TareaRrhhGetPayload<{ include: typeof INCLUIR_TAREA }>;
 
-const nombreDe = (u: { name: string; lastname: string } | null | undefined) => (u ? `${u.name} ${u.lastname}`.trim() : '');
+const nombreDe = (u: { name: string; lastname: string } | null | undefined) => (u ? apellidosNombres(u) : '');
 
 export interface DatosTareaDeInforme {
   informeId: string;
@@ -111,8 +112,8 @@ export class TareasService {
       fechaLimite: t.fechaLimite,
       estado: t.estado,
       vencida: tareaVencida(t, ahora),
-      asignadoA: { id: t.asignadoA.id, nombre: nombreDe(t.asignadoA), agencia: t.asignadoA.agencia?.nombre ?? null, activo: t.asignadoA.estado === 1 },
-      asignadoPor: { id: t.asignadoPor.id, nombre: nombreDe(t.asignadoPor) },
+      asignadoA: { id: t.asignadoA.id, nombre: apellidosNombres(t.asignadoA), agencia: t.asignadoA.agencia?.nombre ?? null, activo: t.asignadoA.estado === 1 },
+      asignadoPor: { id: t.asignadoPor.id, nombre: apellidosNombres(t.asignadoPor) },
       respuesta: t.respuesta,
       creadaEn: t.createdAt,
       completadaEn: t.completadaEn,
@@ -193,7 +194,7 @@ export class TareasService {
       orderBy: [{ name: 'asc' }, { lastname: 'asc' }],
       take: 1000,
     });
-    return personas.map((p) => ({ id: p.id, nombre: nombreDe(p), rol: p.role?.namerol ?? '', agencia: p.agencia?.nombre ?? null }));
+    return personas.map((p) => ({ id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '', agencia: p.agencia?.nombre ?? null }));
   }
 
   /** Tareas Pendientes cuyo responsable ya no está activo: alguien debe reasignarlas. */

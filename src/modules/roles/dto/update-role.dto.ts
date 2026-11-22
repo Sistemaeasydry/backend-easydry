@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { AMBITOS } from '../../../common/permisos/catalogo-permisos.js';
+import { AMBITOS, CATEGORIAS_ROL } from '../../../common/permisos/catalogo-permisos.js';
 
 const aLista = ({ value }: { value: unknown }) => {
   if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
@@ -48,4 +48,9 @@ export class UpdateRoleDto {
   @IsOptional()
   @IsIn([...AMBITOS], { message: 'El ámbito debe ser GLOBAL, REGION, AGENCIA o PROPIO' })
   ambito?: string;
+
+  @ApiProperty({ example: 'OPERADOR', description: 'Categoría del rol', enum: CATEGORIAS_ROL, required: false })
+  @IsOptional()
+  @IsIn([...CATEGORIAS_ROL], { message: 'La categoría debe ser ADMINISTRACION u OPERADOR' })
+  categoria?: string;
 }

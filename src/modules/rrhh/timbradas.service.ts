@@ -19,6 +19,7 @@ import {
   type OrigenTimbrada,
   type SitioReferencia,
 } from './rrhh.reglas.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** Días que se devuelven por defecto y tope de la consulta. */
 const DIAS_POR_DEFECTO = 14;
@@ -243,7 +244,7 @@ export class TimbradasService {
       orderBy: [{ fechaDia: 'desc' }, { marcadaEn: 'asc' }],
       take: FILAS_MAXIMAS,
     });
-    const presentadas = await this.presentar(filas, new Map([[String(user.id), { id: String(user.id), nombre: user.nombre ?? `${user.name ?? ''} ${user.lastname ?? ''}`.trim(), rol: user.roleDetails?.namerol ?? '' }]]));
+    const presentadas = await this.presentar(filas, new Map([[String(user.id), { id: String(user.id), nombre: user.nombre ?? apellidosNombres(user), rol: user.roleDetails?.namerol ?? '' }]]));
     const evaluacion = await this.horarios.evaluar([{ id: String(user.id), createdAt: user.createdAt ? new Date(user.createdAt) : new Date(0) }], desde, hasta, filas);
     return { ...presentadas, evaluacion };
   }
@@ -262,7 +263,7 @@ export class TimbradasService {
       orderBy: [{ fechaDia: 'desc' }, { marcadaEn: 'asc' }],
       take: FILAS_MAXIMAS,
     });
-    const mapa = new Map(personas.map((p) => [p.id, { id: p.id, nombre: `${p.name} ${p.lastname}`.trim(), rol: p.role?.namerol ?? '' }]));
+    const mapa = new Map(personas.map((p) => [p.id, { id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '' }]));
     const resultado = await this.presentar(filas, mapa);
     // Solo se evalúa a quien timbra (los administradores no tienen horario).
     const evaluacion = await this.horarios.evaluar(personas.filter((p) => p.role?.capacidades?.includes('rrhh.timbrar')).map((p) => ({ id: p.id, createdAt: p.createdAt })), desde, hasta, filas);

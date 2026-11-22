@@ -26,6 +26,10 @@ export function exigirPermisoSubida(user: any, dto: Pick<GenerateUploadTicketDto
     if (!tienePermiso(user, 'rrhh.timbrar')) throw new ForbiddenException('Tu rol no puede timbrar.');
     return;
   }
+  if (dto.type === 'FOTO_DOTACION') {
+    if (!tienePermiso(user, 'dotaciones.entregar')) throw new ForbiddenException('Tu rol no puede registrar entregas de dotación.');
+    return;
+  }
   if (dto.type === 'FOTO_TAREA' || dto.type === 'VIDEO_TAREA' || dto.type === 'DOCUMENTO_TAREA' || dto.category === 'RRHH') {
     if (!tieneAlgunPermiso(user, ['rrhh.tareas.propias', 'rrhh.tareas.asignar'])) {
       throw new ForbiddenException('Tu rol no puede adjuntar archivos a tareas.');

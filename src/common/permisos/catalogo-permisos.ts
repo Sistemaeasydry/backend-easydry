@@ -105,7 +105,8 @@ export const CATALOGO_PERMISOS = [
   def('Maquinaria', 'limpiezas.evidencias', 'Subir evidencias de limpieza', 'Registrar fotos de limpieza de maquinaria. Este permiso es independiente de evidencias de servicios, incidencias y mantenimiento.'),
   def('Maquinaria', 'limpiezas.ver', 'Ver limpiezas de maquinaria', 'Auditoría de limpiezas registradas (fecha, quién y fotos) dentro de su ámbito.'),
   def('Maquinaria', 'limpiezas.fotos', 'Ver fotos de limpieza', 'Abrir las fotos de evidencia de las limpiezas de maquinaria. Quien registra la limpieza (líder, backup, auxiliar, pulidor) no las ve: es de la supervisión.'),
-  def('Maquinaria', 'limpiezas.editar', 'Editar o eliminar limpiezas', 'Corregir las observaciones o eliminar un registro de limpieza dentro de su ámbito.'),
+  def('Maquinaria', 'limpiezas.editar', 'Editar limpiezas', 'Corregir las observaciones de un registro de limpieza dentro de su ámbito. Eliminar un registro queda solo para los administradores.'),
+  def('Maquinaria', 'limpiezas.aprobar', 'Aprobar o rechazar limpiezas', 'Revisar las limpiezas registradas: aprobarlas o rechazarlas con el motivo. Al rechazar, quien la registró recibe la alerta y la notificación.'),
 
   def('Auditorías', 'informes.ver', 'Ver informes de inspección', 'Listado y detalle de los informes de su ámbito. Quien no puede auditar solo ve los informes ya guardados de su agencia.'),
   def('Auditorías', 'informes.crear', 'Crear y editar informes de inspección', 'Hacer inspecciones: crear informes, editar sus borradores, registrar novedades, actividades y planes de acción, adjuntar evidencias, firmarlos y guardarlos de forma definitiva.'),
@@ -125,8 +126,16 @@ export const CATALOGO_PERMISOS = [
   def('RRHH', 'rrhh.timbradas.ver', 'Ver timbradas del equipo', 'Consultar las timbradas, con foto y distancia, de las personas de su ámbito.'),
   def('RRHH', 'rrhh.tareas.propias', 'Recibir y completar tareas', 'Ver las tareas que le asignaron y completarlas con respuesta y evidencia. No lo tienen ADMIN ni SUPER_ADMIN.'),
   def('RRHH', 'rrhh.tareas.asignar', 'Asignar y revisar tareas', 'Asignar tareas a personas de su ámbito, y revisar, devolver, cancelar o reasignar las que asignó.'),
+  def('RRHH', 'rrhh.tareas.crear', 'Crear tareas', 'Asignar una tarea nueva a una persona de su ámbito. Se activa junto con la lista de tareas asignadas.'),
+  def('RRHH', 'rrhh.tareas.revisar', 'Revisar tareas completadas', 'Aprobar o devolver una tarea que su responsable marcó como completada.'),
+  def('RRHH', 'rrhh.tareas.cancelar', 'Cancelar tareas', 'Cancelar una tarea Pendiente con su motivo.'),
+  def('RRHH', 'rrhh.tareas.reasignar', 'Reasignar tareas', 'Pasar una tarea Pendiente a otra persona de su ámbito.'),
   def('RRHH', 'rrhh.ubicaciones.gestionar', 'Configurar ubicación de agencias y bodegas', 'Fijar la ubicación de cada agencia y bodega contra la que se valida la timbrada (el radio es fijo por canal).'),
+  def('RRHH', 'rrhh.ubicaciones.quitar', 'Quitar ubicación de agencias y bodegas', 'Quitar la ubicación guardada de una agencia o bodega. Mientras no tenga ubicación, su personal no puede timbrar.'),
   def('RRHH', 'rrhh.horarios.gestionar', 'Editar horarios y ajustes de timbrada', 'Editar el horario semanal de cada persona y la tolerancia y la ventana de timbrada. Cada cambio rige desde mañana, exige un motivo y queda en el historial. Solo ADMIN y SUPER_ADMIN.'),
+  def('RRHH', 'dotaciones.ver', 'Ver dotaciones', 'Consultar productos, stock, planes y entregas de dotación (uniformes, EPP, etc.).'),
+  def('RRHH', 'dotaciones.gestionar', 'Gestionar dotaciones', 'Crear categorías, productos y planes de dotación, y registrar ingresos de stock.'),
+  def('RRHH', 'dotaciones.entregar', 'Registrar entregas de dotación', 'Confirmar una entrega con las cantidades entregadas y de 1 a 5 fotos de evidencia; descuenta el stock.'),
 
   def('Sistema', 'sync.usar', 'Usar la sincronización de la app', 'Sincronizar datos de la app móvil y registrar el dispositivo.'),
   def('Sistema', 'sync.dlq.gestionar', 'Gestionar errores de sincronización', 'Ver, resolver y reintentar los errores de todos los usuarios.'),
@@ -145,6 +154,9 @@ export const esCodigoPermiso = (codigo: string): boolean => CODIGOS_SET.has(codi
 /** Sobre qué datos actúa un rol. */
 export const AMBITOS = ['GLOBAL', 'REGION', 'AGENCIA', 'PROPIO'] as const;
 export type Ambito = (typeof AMBITOS)[number];
+export const CATEGORIAS_ROL = ['ADMINISTRACION', 'OPERADOR'] as const;
+export type CategoriaRol = (typeof CATEGORIAS_ROL)[number];
+export const esCategoriaRol = (v: unknown): v is CategoriaRol => typeof v === 'string' && (CATEGORIAS_ROL as readonly string[]).includes(v);
 export const esAmbito = (v: unknown): v is Ambito => typeof v === 'string' && (AMBITOS as readonly string[]).includes(v);
 
 /** Roles oficiales: no se pueden eliminar. SUPER_ADMIN además es inmutable. */

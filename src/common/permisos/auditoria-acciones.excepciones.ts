@@ -5,6 +5,8 @@
  * Si algún día un endpoint pasa a exigirla, se borra de aquí.
  */
 export const EXCEPCIONES_SERVIDOR: Record<string, string> = {
+  'rrhh-timbradas.equipo.exportar':
+    "El Excel y el PDF se arman en la pantalla con las timbradas que ya devolvió timbradas/equipo (que exige 'rrhh.timbradas.ver'); no hay un endpoint de exportación que exigir. Se oculta el botón.",
   'dashboard.alertas.ver':
     "El listado de alertas (alertas/list) lo comparten el Dashboard y la pestaña Alertas de Inventario: lo exige 'alertas.ver', que esta casilla otorga. Se oculta el bloque en pantalla.",
   'agencias.personal.ver':

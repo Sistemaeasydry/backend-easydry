@@ -50,7 +50,7 @@ const CLAVE_AUDITORIA = /^(?:thumbs\/|view\/)?agencias\/[^/]+\/auditorias\//i;
 /** Fotos de timbrada y adjuntos de tareas de RRHH: `rrhh/<timbradas|tareas>/<usuario>/…`. Privadas: las ve su dueño o quien corresponde. */
 const CLAVE_RRHH = /^(?:thumbs\/|view\/)?rrhh\//i;
 /** Tipos de archivo de RRHH: la carpeta lleva el id de quien sube, que sale de la sesión y no del cliente. */
-const TIPOS_RRHH = ['FOTO_TIMBRADA', 'FOTO_TAREA', 'VIDEO_TAREA', 'DOCUMENTO_TAREA'];
+const TIPOS_RRHH = ['FOTO_TIMBRADA', 'FOTO_TAREA', 'VIDEO_TAREA', 'DOCUMENTO_TAREA', 'FOTO_DOTACION'];
 const esSubidaRrhh = (dto: GenerateUploadTicketDto) => dto.category === 'RRHH' || TIPOS_RRHH.includes(String(dto.type || '').toUpperCase());
 const CLAVE_MAQUINARIA =/^(thumbs\/|view\/)?(agencias\/)?maquinaria\//i;
 

@@ -5,6 +5,7 @@ import { rolDeUsuario } from './alias-roles.js';
 import { FUNCION, rolConFuncion, tieneFuncion } from './funciones.js';
 import { resolverAlcance, puedeSobreAgencia } from './alcance.js';
 import { tieneAlgunPermiso } from './capacidades.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 export type ReglaDecision = 'TITULAR' | 'RESPALDO' | 'ADMIN';
 /** Lo que queda en el registro: las reglas de decisión más «PERMISO» (la acción la hizo quien tiene la casilla, sin regla de aprobador). */
@@ -119,7 +120,7 @@ export class DecisionesService {
     agenciaId?: string | null;
   }): Promise<void> {
     if (!datos.entidadIds.length) return;
-    const nombre = [datos.user?.name, datos.user?.lastname].filter(Boolean).join(' ').trim() || datos.user?.email || 'Usuario';
+    const nombre = apellidosNombres(datos.user) || datos.user?.email || 'Usuario';
     await this.prisma.auditoriaDecision.createMany({
       data: datos.entidadIds.map((entidadId) => ({
         entidad: datos.entidad,
@@ -145,7 +146,7 @@ export class DecisionesService {
     agenciaId?: string | null;
     detalle?: Record<string, unknown>;
   }): Promise<void> {
-    const nombre = [datos.user?.name, datos.user?.lastname].filter(Boolean).join(' ').trim() || datos.user?.email || 'Usuario';
+    const nombre = apellidosNombres(datos.user) || datos.user?.email || 'Usuario';
     await this.prisma.auditoriaDecision.create({
       data: {
         entidad: datos.entidad,

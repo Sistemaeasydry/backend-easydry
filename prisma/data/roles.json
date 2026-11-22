@@ -4,6 +4,7 @@
     "descripcion": "Administrador operativo de la plataforma. Gestiona usuarios, configuración y módulos asignados. No edita roles ni permisos.",
     "estado": 1,
     "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -128,6 +129,7 @@
       "inventario.productos.gestionar",
       "inventario.reajustar",
       "inventario.ver",
+      "limpiezas.aprobar",
       "limpiezas.editar",
       "limpiezas.evidencias",
       "limpiezas.fotos",
@@ -248,6 +250,7 @@
       "taller.incidentes.editar",
       "taller.incidentes.reportar",
       "taller.incidentes.resolver",
+      "taller.limpiezas.aprobar",
       "taller.limpiezas.editar",
       "taller.limpiezas.fotos",
       "taller.limpiezas.registrar",
@@ -304,6 +307,7 @@
     "descripcion": "Aprobador de agencia: audita evidencias y aprueba, rechaza o anula los servicios de su agencia.",
     "estado": 1,
     "ambito": "AGENCIA",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -389,6 +393,7 @@
     "descripcion": "Asistente de bodega: opera una bodega regional y despacha solo a agencias de la región de su bodega.",
     "estado": 1,
     "ambito": "REGION",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -501,6 +506,7 @@
     "descripcion": "Líder operador de reemplazo: opera como un líder de agencia mientras está asignado temporalmente a una agencia de su región.",
     "estado": 1,
     "ambito": "AGENCIA",
+    "categoria": "OPERADOR",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -642,6 +648,7 @@
     "descripcion": "Auxiliar del líder: lavador de una bahía que, con las mismas capacidades del líder, opera su agencia (uno por agencia).",
     "estado": 1,
     "ambito": "AGENCIA",
+    "categoria": "OPERADOR",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -784,6 +791,7 @@
     "descripcion": "Coordinador de bodega: opera todo el stock nacional, compra a la bodega central y despacha a cualquier destino.",
     "estado": 1,
     "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -920,6 +928,7 @@
     "descripcion": "Coordinador comercial: consulta (solo lectura, con precios) su región, y asigna y monitorea retos, productividad y reportes.",
     "estado": 1,
     "ambito": "REGION",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1059,6 +1068,7 @@
     "descripcion": "Coordinador de mantenimiento: alta de maquinaria, reparaciones, programación y asignación a técnicos.",
     "estado": 1,
     "ambito": "REGION",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1086,6 +1096,7 @@
       "inspecciones.acciones",
       "inspecciones.crear",
       "inspecciones.ver",
+      "limpiezas.aprobar",
       "limpiezas.editar",
       "limpiezas.ver",
       "mantenimientos.ejecutar",
@@ -1116,6 +1127,7 @@
       "taller.incidentes.cancelar",
       "taller.incidentes.resolver",
       "taller.incidentes.editar",
+      "taller.limpiezas.aprobar",
       "taller.limpiezas.editar",
       "taller.mantenimientos.editar",
       "taller.mantenimientos.ejecutar",
@@ -1178,6 +1190,7 @@
     "descripcion": "Coordinador de servicios especiales regional: crea, asigna, reasigna y anula los servicios especiales de su región.",
     "estado": 1,
     "ambito": "REGION",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1313,6 +1326,7 @@
     "descripcion": "Jefe comercial: visibilidad comercial nacional (solo lectura, con precios), retos, productividad y reportes.",
     "estado": 1,
     "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1443,6 +1457,7 @@
     "descripcion": "Personal de lavado en bahía. No opera la plataforma: solo ve el resultado de su inspección 5S y sus informes de inspección.",
     "estado": 1,
     "ambito": "AGENCIA",
+    "categoria": "OPERADOR",
     "permisos": [
       "notificaciones",
       "informes-inspeccion",
@@ -1496,6 +1511,7 @@
     "descripcion": "Líder operador: registra las OT de su agencia, controla bahías, inventario local, recepciones y despachos a otras agencias de su región.",
     "estado": 1,
     "ambito": "AGENCIA",
+    "categoria": "OPERADOR",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1637,6 +1653,7 @@
     "descripcion": "Pulidor: especialista en servicios especiales. Fijo (con agencia, opera en su sede) o móvil (sin agencia, opera en su región).",
     "estado": 1,
     "ambito": "AGENCIA",
+    "categoria": "OPERADOR",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1757,6 +1774,7 @@
     "descripcion": "Nivel máximo de la plataforma. Acceso global inmutable: supervisión nacional, auditoría y gobierno del sistema.",
     "estado": 1,
     "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -1774,10 +1792,11 @@
       "informes-inspeccion",
       "auditorias-5s",
       "configuracion/sellos",
-      "usuarios",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "rrhh/dotaciones",
+      "usuarios",
+      "perfil"
     ],
     "capacidades": [
       "agencias.agencias.crear",
@@ -1881,6 +1900,7 @@
       "inventario.productos.gestionar",
       "inventario.reajustar",
       "inventario.ver",
+      "limpiezas.aprobar",
       "limpiezas.editar",
       "limpiezas.evidencias",
       "limpiezas.fotos",
@@ -2002,6 +2022,7 @@
       "taller.incidentes.editar",
       "taller.incidentes.reportar",
       "taller.incidentes.resolver",
+      "taller.limpiezas.aprobar",
       "taller.limpiezas.editar",
       "taller.limpiezas.fotos",
       "taller.limpiezas.registrar",
@@ -2030,7 +2051,18 @@
       "rrhh.horarios.gestionar",
       "rrhh-timbradas.horarios.editar",
       "rrhh-timbradas.horarios.ajustes",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "dotaciones.ver",
+      "dotaciones.gestionar",
+      "dotaciones.entregar",
+      "pagina.dotaciones",
+      "pagina.dotaciones.entregas",
+      "pagina.dotaciones.productos",
+      "pagina.dotaciones.planes",
+      "dotaciones.entregas.registrar",
+      "dotaciones.productos.gestionar",
+      "dotaciones.productos.ingreso",
+      "dotaciones.planes.gestionar"
     ],
     "acciones": {
       "verTodasSucursales": true,
@@ -2058,9 +2090,10 @@
   },
   {
     "namerol": "SUPERVISOR",
-    "descripcion": "Supervisor regional: controla agencias, bahías, operadores e inventario de su región, aprueba donde no hay aprobador y consulta (solo lectura) los usuarios de su región, sin los asistentes de mantenimiento.",
+    "descripcion": "Coordinador regional: controla agencias, bahías, operadores e inventario de su región, aprueba donde no hay aprobador y consulta (solo lectura) los usuarios de su región, sin los asistentes de mantenimiento.",
     "estado": 1,
     "ambito": "REGION",
+    "categoria": "ADMINISTRACION",
     "permisos": [
       "dashboard",
       "notificaciones",
@@ -2230,6 +2263,7 @@
     "descripcion": "Asistente de mantenimiento: trabaja en la región que tiene asignada y ejecuta y cierra las órdenes de mantenimiento que le asignan.",
     "estado": 1,
     "ambito": "REGION",
+    "categoria": "OPERADOR",
     "permisos": [
       "dashboard",
       "notificaciones",

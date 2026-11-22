@@ -25,7 +25,11 @@ import {
 } from './dto/rrhh.dto.js';
 
 /** La ubicación se configura desde Agencias (casilla de la agencia) o desde Inventario > Bodegas (casilla de la bodega); ambas otorgan el permiso base. */
-const PERMISOS_UBICACION = ['rrhh.ubicaciones.gestionar', 'agencias.agencias.ubicacion', 'inventario.bodegas.ubicacion'];
+const PERMISOS_UBICACION = ['rrhh.ubicaciones.gestionar', 'rrhh.ubicaciones.quitar', 'agencias.agencias.ubicacion', 'inventario.bodegas.ubicacion'];
+/** Quitar la ubicación: su permiso propio o la casilla de la agencia o la bodega. */
+const PERMISOS_QUITAR_UBICACION = ['rrhh.ubicaciones.quitar', 'agencias.agencias.ubicacion.quitar', 'inventario.bodegas.ubicacion.quitar'];
+/** Guardar la ubicación (no incluye quitarla). */
+const PERMISOS_GUARDAR_UBICACION = ['rrhh.ubicaciones.gestionar', 'agencias.agencias.ubicacion', 'inventario.bodegas.ubicacion'];
 
 /** Editar horarios y ajustes: el permiso base o la casilla de la pantalla de Timbradas (ambas otorgan lo mismo). */
 const PERMISOS_EDITAR_HORARIO = ['rrhh.horarios.gestionar', 'rrhh-timbradas.horarios.editar'];
@@ -52,7 +56,7 @@ export class RrhhController {
     return this.ubicaciones.listar(user);
   }
 
-  @Permiso(...PERMISOS_UBICACION)
+  @Permiso(...PERMISOS_GUARDAR_UBICACION)
   @Post('ubicaciones/guardar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Guardar la ubicación y el radio de una agencia o bodega' })
@@ -60,7 +64,7 @@ export class RrhhController {
     return this.ubicaciones.guardar(dto, user);
   }
 
-  @Permiso(...PERMISOS_UBICACION)
+  @Permiso(...PERMISOS_QUITAR_UBICACION)
   @Post('ubicaciones/quitar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Quitar la ubicación de una agencia o bodega' })
@@ -202,7 +206,7 @@ export class RrhhController {
     return this.tareas.sinResponsableActivo(user);
   }
 
-  @Permiso('rrhh.tareas.asignar')
+  @Permiso('rrhh.tareas.crear', 'rrhh-tareas.asignadas.crear')
   @Post('tareas/crear')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Asignar una tarea' })
@@ -210,7 +214,7 @@ export class RrhhController {
     return this.tareas.crear(dto, user);
   }
 
-  @Permiso('rrhh.tareas.asignar')
+  @Permiso('rrhh.tareas.revisar', 'rrhh-tareas.asignadas.revisar')
   @Post('tareas/revisar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Aprobar o devolver una tarea completada' })
@@ -218,7 +222,7 @@ export class RrhhController {
     return this.tareas.revisar(dto, user);
   }
 
-  @Permiso('rrhh.tareas.asignar')
+  @Permiso('rrhh.tareas.cancelar', 'rrhh-tareas.asignadas.cancelar')
   @Post('tareas/cancelar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancelar una tarea Pendiente' })
@@ -226,7 +230,7 @@ export class RrhhController {
     return this.tareas.cancelar(dto, user);
   }
 
-  @Permiso('rrhh.tareas.asignar')
+  @Permiso('rrhh.tareas.reasignar', 'rrhh-tareas.asignadas.reasignar')
   @Post('tareas/reasignar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reasignar una tarea Pendiente a otra persona' })

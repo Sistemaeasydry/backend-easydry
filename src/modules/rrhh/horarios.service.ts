@@ -21,9 +21,10 @@ import {
   type EvaluacionDia,
   type SemanaHorario,
 } from './rrhh.horarios.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 const dia = (d: Date) => d.toISOString().slice(0, 10);
-const nombreDe = (u: { name?: string | null; lastname?: string | null } | null | undefined) => `${u?.name ?? ''} ${u?.lastname ?? ''}`.trim();
+const nombreDe = (u: { name?: string | null; lastname?: string | null } | null | undefined) => apellidosNombres(u);
 
 interface VersionHorario { id: string; userId: string; vigenteDesde: Date; dias: unknown; motivo: string; actorId: string; createdAt: Date }
 interface VersionAjuste { id: string; vigenteDesde: Date; toleranciaMin: number; ventanaMin: number; motivo: string; actorId: string; createdAt: Date }
@@ -169,7 +170,7 @@ export class HorariosService {
         const proxima = versionVigente(propias.filter((v) => dia(v.vigenteDesde) > h.dia), '9999-12-31');
         return {
           id: p.id,
-          nombre: nombreDe(p),
+          nombre: apellidosNombres(p),
           rol: p.role?.namerol ?? '',
           semana: semanaDe(vigente),
           porDefecto: !vigente,

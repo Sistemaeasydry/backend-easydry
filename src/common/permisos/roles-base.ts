@@ -26,7 +26,7 @@ const LECTURA_RED: CodigoPermiso[] = p(
 );
 
 const ADMIN_CAPACIDADES: CodigoPermiso[] = CODIGOS_PERMISOS.filter(
-  (c) => c !== 'roles.gestionar' && c !== 'especiales.crear',
+  (c) => c !== 'roles.gestionar' && c !== 'especiales.crear' && !c.startsWith('dotaciones.'), // Dotaciones: solo SUPER_ADMIN (se puede dar a otros roles desde Roles).
 );
 
 /** Lo que los roles comerciales consultan, solo lectura: OT especiales, agencias, mapa, lavadores, inventario y envíos. */
@@ -115,7 +115,7 @@ export const ROLES_BASE: RolBase[] = [
   {
     namerol: 'SUPERVISOR',
     descripcion:
-      'Supervisor regional: controla agencias, bahías, operadores e inventario de su región, aprueba donde no hay aprobador y consulta (solo lectura) los usuarios de su región, sin los asistentes de mantenimiento.',
+      'Coordinador regional: controla agencias, bahías, operadores e inventario de su región, aprueba donde no hay aprobador y consulta (solo lectura) los usuarios de su región, sin los asistentes de mantenimiento.',
     ambito: 'REGION',
     capacidades: p(
       ...LECTURA_RED,
@@ -325,6 +325,7 @@ export const ROLES_BASE: RolBase[] = [
       'maquinaria.evidencias',
       'limpiezas.ver',
       'limpiezas.editar',
+      'limpiezas.aprobar',
       'evidencias.subir',
       'sync.usar',
     ),
@@ -432,8 +433,8 @@ for (const rol of ROLES_BASE) {
   const quitar = ROLES_NO_TIMBRAN.includes(rol.namerol) ? CAPACIDADES_RRHH_PROPIAS : [];
   const extra: CodigoPermiso[] = [
     ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? [] : CAPACIDADES_RRHH_PROPIAS),
-    ...(ROLES_ASIGNAN_TAREAS.includes(rol.namerol) ? p('rrhh.tareas.asignar', 'rrhh.timbradas.ver') : []),
-    ...(ROLES_CONFIGURAN_UBICACION.includes(rol.namerol) ? p('rrhh.ubicaciones.gestionar') : []),
+    ...(ROLES_ASIGNAN_TAREAS.includes(rol.namerol) ? p('rrhh.tareas.asignar', 'rrhh.tareas.crear', 'rrhh.tareas.revisar', 'rrhh.tareas.cancelar', 'rrhh.tareas.reasignar', 'rrhh.timbradas.ver') : []),
+    ...(ROLES_CONFIGURAN_UBICACION.includes(rol.namerol) ? p('rrhh.ubicaciones.gestionar', 'rrhh.ubicaciones.quitar') : []),
     ...(ROLES_EDITAN_HORARIOS.includes(rol.namerol) ? p('rrhh.horarios.gestionar') : []),
   ];
   rol.capacidades = [...new Set([...rol.capacidades.filter((c) => !quitar.includes(c)), ...extra])];

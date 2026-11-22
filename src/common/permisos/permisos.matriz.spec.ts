@@ -55,8 +55,10 @@ describe('matriz acordada de permisos por rol', () => {
       ROLES_BASE.find((r) => r.namerol === 'SUPER_ADMIN')!.capacidades,
     ).toEqual(expect.arrayContaining(CODIGOS_PERMISOS.filter((c) => c !== 'especiales.crear' && !NO_TIMBRAN.includes(c))));
     const admin = ROLES_BASE.find((r) => r.namerol === 'ADMIN')!.capacidades;
-    expect(admin).toEqual(expect.arrayContaining(CODIGOS_PERMISOS.filter((c) => c !== 'roles.gestionar' && c !== 'especiales.crear' && !NO_TIMBRAN.includes(c))));
+    expect(admin).toEqual(expect.arrayContaining(CODIGOS_PERMISOS.filter((c) => c !== 'roles.gestionar' && c !== 'especiales.crear' && !c.startsWith('dotaciones.') && !NO_TIMBRAN.includes(c))));
     expect(admin).not.toContain('roles.gestionar');
+    // Dotaciones es solo del SUPER_ADMIN (otros roles la reciben desde Roles).
+    expect(admin.filter((c) => c.startsWith('dotaciones.'))).toEqual([]);
     // El admin no crea OT especiales para sí mismo (eso es del pulidor), pero sí las asigna y reasigna a otros pulidores.
     expect(admin).not.toContain('especiales.crear');
     expect(admin).toContain('especiales.asignar');

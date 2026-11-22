@@ -42,6 +42,7 @@ const REQUISITOS: Record<string, string[]> = {
   'taller.mantenimientos.editar': ['mantenimientos.ver'],
   'taller.limpiezas.registrar': ['limpiezas.ver'],
   'taller.limpiezas.editar': ['limpiezas.ver'],
+  'taller.limpiezas.aprobar': ['limpiezas.ver'],
   'taller.limpiezas.fotos': ['limpiezas.ver'],
   // Exportar limpìezas necesita ver el historial.
   'reportes.maquinaria.limpiezas': ['limpiezas.ver'],
@@ -56,6 +57,7 @@ const REQUISITOS: Record<string, string[]> = {
   'inventario.bodegas.estado': ['inventario.ver'],
   'inventario.bodegas.eliminar': ['inventario.ver'],
   'inventario.bodegas.ubicacion': ['inventario.ver'],
+  'inventario.bodegas.ubicacion.quitar': ['inventario.ver'],
   // Las alertas se leen con la sección; crear o atender es la casilla.
   'inventario.alertas.crear': ['alertas.ver', 'inventario.ver'],
   'inventario.alertas.atender': ['alertas.ver', 'inventario.ver'],

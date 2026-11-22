@@ -31,6 +31,7 @@ export const PERMISOS_POR_MODULO: Readonly<Record<string, readonly CodigoPermiso
   'configuracion/sellos': ['sellos.gestionar'],
   'rrhh/tareas': ['rrhh.tareas.propias', 'rrhh.tareas.asignar'],
   'rrhh/timbradas': ['rrhh.timbrar', 'rrhh.timbradas.ver'],
+  'rrhh/dotaciones': ['dotaciones.ver'],
   usuarios: ['usuarios.gestionar', 'backup.gestionar', 'roles.ver', 'roles.gestionar'],
   perfil: null,
 };

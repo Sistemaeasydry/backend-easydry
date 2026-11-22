@@ -121,6 +121,7 @@ export const PAGINAS: readonly PaginaDef[] = [
       accion('agencias.precios.fijar', 'Fijar precios por agencia', ['agencias.precios.gestionar']),
       // RRHH: la ubicación de la agencia es la referencia con la que se valida la timbrada de su personal.
       accion('agencias.agencias.ubicacion', 'Configurar ubicación de timbrada', ['rrhh.ubicaciones.gestionar'], { migrarSi: ['rrhh.ubicaciones.gestionar'] }),
+      accion('agencias.agencias.ubicacion.quitar', 'Quitar ubicación de timbrada', ['rrhh.ubicaciones.quitar'], { migrarSi: ['rrhh.ubicaciones.gestionar'] }),
       PRECIOS,
     ], ['agencias.consultar', 'agencias.crear', 'agencias.editar', 'agencias.estado', 'bahias.editar', 'agencias.precios.gestionar']),
     sub('agencias', 'regiones', 'Regiones', [], [
@@ -255,7 +256,8 @@ export const PAGINAS: readonly PaginaDef[] = [
     sub('taller', 'limpiezas', 'Limpiezas', ['limpiezas.ver'], [
       REGISTRAR_LIMPIEZA,
       accion('taller.limpiezas.fotos', 'Ver fotos de limpieza', ['limpiezas.fotos'], { grupo: 'Consultar' }),
-      accion('taller.limpiezas.editar', 'Editar o eliminar limpieza', ['limpiezas.editar'], { grupo: 'Operar' }),
+      accion('taller.limpiezas.editar', 'Editar limpieza', ['limpiezas.editar'], { grupo: 'Operar' }),
+      accion('taller.limpiezas.aprobar', 'Aprobar o rechazar limpieza', ['limpiezas.aprobar'], { grupo: 'Operar' }),
       exportar('reportes.maquinaria.limpiezas', 'Exportar limpiezas'),
     ]),
   ]),
@@ -271,6 +273,7 @@ export const PAGINAS: readonly PaginaDef[] = [
       accion('inventario.bodegas.estado', 'Activar o desactivar bodega', ['bodegas.gestionar'], { grupo: 'Catálogo' }),
       accion('inventario.bodegas.eliminar', 'Eliminar bodega', ['bodegas.gestionar'], { grupo: 'Catálogo' }),
       accion('inventario.bodegas.ubicacion', 'Configurar ubicación de timbrada', ['rrhh.ubicaciones.gestionar'], { grupo: 'Catálogo' }),
+      accion('inventario.bodegas.ubicacion.quitar', 'Quitar ubicación de timbrada', ['rrhh.ubicaciones.quitar'], { grupo: 'Catálogo', migrarSi: ['rrhh.ubicaciones.gestionar'] }),
       REAJUSTAR_STOCK,
       DESPACHAR_INSUMOS,
     ], ['inventario.ver']),
@@ -334,16 +337,39 @@ export const PAGINAS: readonly PaginaDef[] = [
   // RRHH: cada pantalla tiene su parte propia (lo mío) y la del equipo. Todos los roles menos ADMIN y SUPER_ADMIN timbran y reciben tareas.
   pagina('rrhh-tareas', 'Tareas del personal', '/rrhh/tareas', 'rrhh/tareas', [], [
     sub('rrhh-tareas', 'mis', 'Mis tareas', ['rrhh.tareas.propias'], []),
-    sub('rrhh-tareas', 'asignadas', 'Tareas asignadas', ['rrhh.tareas.asignar'], []),
+    // Cada operación es una casilla: quien ya asignaba tareas conserva todas (se migran desde `rrhh.tareas.asignar`).
+    sub('rrhh-tareas', 'asignadas', 'Tareas asignadas', ['rrhh.tareas.asignar'], [
+      accion('rrhh-tareas.asignadas.crear', 'Crear tarea', ['rrhh.tareas.crear'], { migrarSi: ['rrhh.tareas.asignar'] }),
+      accion('rrhh-tareas.asignadas.revisar', 'Aprobar o devolver tarea completada', ['rrhh.tareas.revisar'], { migrarSi: ['rrhh.tareas.asignar'] }),
+      accion('rrhh-tareas.asignadas.cancelar', 'Cancelar tarea', ['rrhh.tareas.cancelar'], { migrarSi: ['rrhh.tareas.asignar'] }),
+      accion('rrhh-tareas.asignadas.reasignar', 'Reasignar tarea', ['rrhh.tareas.reasignar'], { migrarSi: ['rrhh.tareas.asignar'] }),
+    ]),
   ]),
 
   pagina('rrhh-timbradas', 'Timbradas', '/rrhh/timbradas', 'rrhh/timbradas', [], [
     sub('rrhh-timbradas', 'marcar', 'Timbrar', ['rrhh.timbrar'], []),
-    sub('rrhh-timbradas', 'equipo', 'Timbradas del equipo', ['rrhh.timbradas.ver'], []),
+    sub('rrhh-timbradas', 'equipo', 'Timbradas del equipo', ['rrhh.timbradas.ver'], [
+      // La exportación se arma en la pantalla con lo que ya se ve: quien ve el equipo la conserva.
+      accion('rrhh-timbradas.equipo.exportar', 'Exportar timbradas a Excel o PDF', [], { migrarSi: ['rrhh.timbradas.ver'] }),
+    ]),
     // Quien ve las timbradas del equipo ve también su horario; solo ADMIN y SUPER_ADMIN lo editan.
     sub('rrhh-timbradas', 'horarios', 'Horarios del personal', ['rrhh.timbradas.ver'], [
       accion('rrhh-timbradas.horarios.editar', 'Editar el horario de una persona', ['rrhh.horarios.gestionar']),
       accion('rrhh-timbradas.horarios.ajustes', 'Configurar tolerancia y ventana de timbrada', ['rrhh.horarios.gestionar']),
+    ]),
+  ]),
+
+  // Dotaciones: uniformes, EPP y lo que defina el super admin. Productos con stock propio, planes por rol o agencia y entregas con evidencia.
+  pagina('dotaciones', 'Dotaciones', '/rrhh/dotaciones', 'rrhh/dotaciones', [], [
+    sub('dotaciones', 'entregas', 'Entregas', ['dotaciones.ver'], [
+      accion('dotaciones.entregas.registrar', 'Registrar entrega con evidencia', ['dotaciones.entregar']),
+    ]),
+    sub('dotaciones', 'productos', 'Productos y stock', ['dotaciones.ver'], [
+      accion('dotaciones.productos.gestionar', 'Crear y editar categorías y productos', ['dotaciones.gestionar']),
+      accion('dotaciones.productos.ingreso', 'Registrar ingreso de stock', ['dotaciones.gestionar']),
+    ]),
+    sub('dotaciones', 'planes', 'Planes de dotación', ['dotaciones.ver'], [
+      accion('dotaciones.planes.gestionar', 'Crear, editar y desactivar planes', ['dotaciones.gestionar']),
     ]),
   ]),
 
@@ -380,7 +406,7 @@ export const PAGINAS: readonly PaginaDef[] = [
     accion('funcion.pulidor', 'Pulidor: servicios especiales, su kit de insumos y la maquinaria que tiene a su nombre', [], { grupo: 'Funciones del rol' }),
     accion('funcion.tecnico', 'Técnico: repara y da mantenimiento solo a lo que le asignan', [], { grupo: 'Funciones del rol' }),
     accion('funcion.coord_mantenimiento', 'Coordinador de mantenimiento: asigna técnicos y gestiona incidencias y mantenimientos de su región', [], { grupo: 'Funciones del rol' }),
-    accion('funcion.supervisor', 'Supervisor regional: controla su región y aprueba donde no hay aprobador', [], { grupo: 'Funciones del rol' }),
+    accion('funcion.supervisor', 'Coordinador regional: controla su región y aprueba donde no hay aprobador', [], { grupo: 'Funciones del rol' }),
     accion('funcion.coord_especiales', 'Coordinador de servicios especiales: supervisa a los pulidores y sus servicios', [], { grupo: 'Funciones del rol' }),
     accion('funcion.comercial', 'Comercial: consulta la operación, los retos y la productividad', [], { grupo: 'Funciones del rol' }),
     accion('funcion.comercial_nacional', 'Comercial nacional: lo anterior sobre todo el país y recibe los avisos de retos de todas las regiones', [], { grupo: 'Funciones del rol' }),

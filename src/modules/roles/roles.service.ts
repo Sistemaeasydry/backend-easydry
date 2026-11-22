@@ -9,7 +9,7 @@ import { QueryRolesDto } from './dto/query-roles.dto.js';
 import { formatDateTime } from '../../common/utils/date-formatter.util.js';
 import { columnasSimples, whereBusqueda } from '../../common/utils/data-grid.helpers.js';
 import { listarPaginable } from '../../common/utils/listado-paginable.js';
-import { AMBITOS, CATALOGO_PERMISOS, ROL_SUPER_ADMIN, esAmbito, esCodigoPermiso } from '../../common/permisos/catalogo-permisos.js';
+import { AMBITOS, CATALOGO_PERMISOS, CATEGORIAS_ROL, esCategoriaRol, ROL_SUPER_ADMIN, esAmbito, esCodigoPermiso } from '../../common/permisos/catalogo-permisos.js';
 import { normalizarRol, rolDeUsuario } from '../../common/permisos/alias-roles.js';
 import { FUNCION, funcionesDeRol } from '../../common/permisos/funciones.js';
 import { ambitoDeUsuario, tienePermiso } from '../../common/permisos/capacidades.js';
@@ -98,6 +98,7 @@ export class RolesService implements OnModuleInit {
       /** Páginas, sub-páginas y acciones: lo que se activa en el editor de roles. */
       paginas: arbolPaginas(),
       ambitos: [...AMBITOS],
+      categorias: [...CATEGORIAS_ROL],
     };
   }
 
@@ -134,6 +135,7 @@ export class RolesService implements OnModuleInit {
       /** Solo los códigos del catálogo de páginas que el rol tiene activos (lo que edita la pantalla de roles). */
       paginas: (Array.isArray(role.capacidades) ? role.capacidades : []).filter(esCodigoNuevo),
       ambito: role.ambito ?? 'AGENCIA',
+      categoria: role.categoria ?? 'OPERADOR',
       esSistema: !!role.esSistema,
       acciones: role.acciones ?? null,
       fechaCreacion: formatDateTime(role.fechaCreacion),
@@ -264,6 +266,8 @@ export class RolesService implements OnModuleInit {
     const capacidades = this.validarCapacidades(createDto.capacidades ?? []);
     const ambito = createDto.ambito ?? 'AGENCIA';
     if (!esAmbito(ambito)) throw new BadRequestException('Ámbito inválido.');
+    const categoria = createDto.categoria ?? 'OPERADOR';
+    if (!esCategoriaRol(categoria)) throw new BadRequestException('Categoría inválida.');
     this.asegurarNoEscalar(actor, capacidades, ambito);
 
     const newRole = await this.prisma.role.create({
@@ -274,6 +278,7 @@ export class RolesService implements OnModuleInit {
         permisos: modulosDeCapacidades(capacidades, namerol),
         capacidades,
         ambito,
+        categoria,
         acciones: accionesLegacy(capacidades, ambito) as unknown as Prisma.InputJsonValue,
         esSistema: false,
       },
@@ -283,7 +288,7 @@ export class RolesService implements OnModuleInit {
   }
 
   async update(updateDto: UpdateRoleDto, actor: any) {
-    const { id, namerol, descripcion, estado, capacidades, ambito } = updateDto;
+    const { id, namerol, descripcion, estado, capacidades, ambito, categoria } = updateDto;
 
     const role = await this.prisma.role.findUnique({ where: { id } });
     if (!role) {
@@ -342,6 +347,10 @@ export class RolesService implements OnModuleInit {
         throw new ForbiddenException('El ámbito de un rol oficial no se puede cambiar: el sistema depende de él (define qué región, agencia o registros propios puede ver y asignar cada usuario con ese rol).');
       }
       dataToUpdate.ambito = ambito;
+    }
+    if (categoria !== undefined) {
+      if (!esCategoriaRol(categoria)) throw new BadRequestException('Categoría inválida.');
+      dataToUpdate.categoria = categoria;
     }
     // Solo se validan como "otorgados" los permisos que el rol no tenía antes.
     const nuevos = capacidadesNuevas?.filter((c) => !(role.capacidades ?? []).includes(c));

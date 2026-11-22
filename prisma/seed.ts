@@ -13,6 +13,7 @@ interface RolSeed {
   descripcion: string | null;
   estado: number;
   ambito: Prisma.RoleCreateInput['ambito'];
+  categoria: string;
   permisos: string[];
   capacidades: string[];
   acciones: Prisma.InputJsonValue;
@@ -64,6 +65,7 @@ const MODULOS_DATA = [
   { codigo: 'configuracion/sellos', nombre: 'Configuración de Sellos', descripcion: 'Sellos de los jefes de taller: nombre, logo como marca de agua y contraseña de la firma', icono: 'pen-tool', rutaPrincipal: '/configuracion-sellos', grupo: 'Auditorías', disponibleEnApp: false, orden: 148 },
   { codigo: 'rrhh/tareas', nombre: 'Tareas del personal', descripcion: 'Tareas asignadas al personal, con respuesta y evidencia, revisión y avisos de vencimiento', icono: 'clipboard-list', rutaPrincipal: '/rrhh/tareas', grupo: 'RRHH', disponibleEnApp: true, orden: 152 },
   { codigo: 'rrhh/timbradas', nombre: 'Timbradas', descripcion: 'Entrada y salida del personal con foto de cámara y ubicación validada contra su agencia o bodega', icono: 'clock', rutaPrincipal: '/rrhh/timbradas', grupo: 'RRHH', disponibleEnApp: true, orden: 154 },
+  { codigo: 'rrhh/dotaciones', nombre: 'Dotaciones', descripcion: 'Uniformes, EPP y otros productos con stock propio, planes de entrega por rol o agencia y entregas con evidencia fotográfica', icono: 'package-check', rutaPrincipal: '/rrhh/dotaciones', grupo: 'RRHH', disponibleEnApp: false, orden: 156 },
   { codigo: 'reportes', nombre: 'Reportes Operativos', descripcion: 'Generación e impresión de informes consolidados de servicios y rendimiento', icono: 'file-bar-chart', rutaPrincipal: '/reportes', grupo: 'Administración', disponibleEnApp: false, orden: 150 },
   { codigo: 'usuarios', nombre: 'Usuarios, Roles y Permisos', descripcion: 'Directorio de colaboradores y matriz de creación/configuración de roles dinámicos', icono: 'users', rutaPrincipal: '/usuarios', grupo: 'Administración', disponibleEnApp: false, orden: 160 },
   { codigo: 'perfil', nombre: 'Mi Perfil de Usuario', descripcion: 'Información personal, credenciales y datos de sucursal', icono: 'user', rutaPrincipal: '/perfil', grupo: 'Mi Cuenta', disponibleEnApp: true, orden: 170 },
@@ -119,6 +121,7 @@ async function main() {
       permisos: r.permisos,
       capacidades: r.capacidades,
       ambito: r.ambito,
+      categoria: r.categoria,
       esSistema: true,
       acciones: r.acciones,
     };
