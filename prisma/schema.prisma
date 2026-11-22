@@ -78,6 +78,8 @@ model Role {
   capacidades       String[] @default([])
   /// Sobre qué datos actúa el rol: GLOBAL, REGION, AGENCIA o PROPIO
   ambito            String   @default("AGENCIA")
+  /// Tipo de personal del rol: ADMINISTRACION u OPERADOR
+  categoria         String   @default("OPERADOR")
   /// Los 15 roles oficiales no se pueden eliminar
   esSistema         Boolean  @default(false)
   fechaCreacion     DateTime @default(now())
@@ -113,16 +115,20 @@ model ModuloSistema {
 }
 
 model User {
-  id           String @id @default(uuid())
-  email        String @unique
+  id           String  @id @default(uuid())
+  email        String  @unique
   passwordHash String
   /// true = tiene una contraseña temporal: debe cambiarla antes de usar el sistema
   name         String
   lastname     String
   /// Celular de 10 dígitos (09XXXXXXXX). Obligatorio para líderes y visible en la tabla de usuarios.
   telefono     String?
+  /// Cédula de identidad (10 dígitos). Única; solo la ven quienes tienen el permiso `datos.cedula.ver`.
+  cedula       String? @unique
+  /// Ciudad de residencia o de trabajo de la persona (texto libre).
+  ciudad       String?
   roleId       String
-  role         Role   @relation(fields: [roleId], references: [id])
+  role         Role    @relation(fields: [roleId], references: [id])
 
   // Agencia principal (obligatoria para: LIDER, APROBADOR; PULIDOR con agencia = fijo)
   agenciaId String?
@@ -150,6 +156,7 @@ model User {
   updatedAt           DateTime  @updatedAt
 
   timbradas                      Timbrada[]
+  entregasDotacion               EntregaDotacion[]
   horariosPersona                HorarioPersona[]
   tareasRrhhRecibidas            TareaRrhh[]                  @relation("TareaAsignadoA")
   tareasRrhhAsignadas            TareaRrhh[]                  @relation("TareaAsignadoPor")
@@ -192,6 +199,8 @@ model User {
   evidenciasIncidenteSubidas     EvidenciaIncidente[]         @relation("EvidenciaIncidenteSubidaPor")
   evidenciasMantenimientoSubidas EvidenciaMantenimiento[]     @relation("EvidenciaMantenimientoSubidaPor")
   limpiezasMaquinariaRegistradas LimpiezaMaquinaria[]         @relation("LimpiezaRegistradaPor")
+  limpiezasMaquinariaRevisadas   LimpiezaMaquinaria[]         @relation("LimpiezaRevisadaPor")
+  mantenimientosCoordinados      MantenimientoMaquinaria[]    @relation("MantenimientoCoordinador")
   informesInspeccion             InformeInspeccion[]          @relation("InformeInspector")
   auditorias5sRealizadas         Auditoria5s[]                @relation("Auditoria5sAuditor")
   sesionesRefresh                RefreshSession[]
@@ -208,18 +217,18 @@ model User {
 // =========================================================================
 
 model Agencia {
-  id                   String  @id @default(uuid())
-  codigo               String  @unique // e.g. "AGN-QNOR"
-  nombre               String // e.g. "EasyDry Quito Norte"
-  region               String? // Nombre textual (e.g. "Pichincha", "Sierra")
-  direccion            String?
-  telefono             String?
-  email                String?
-  numeroBahias         Int     @default(0) // Capacidad máxima de bahías
-  maxLavadoresPorBahia Int     @default(1) // Máximo de lavadores simultáneos por bahía
+  id                      String  @id @default(uuid())
+  codigo                  String  @unique // e.g. "AGN-QNOR"
+  nombre                  String // e.g. "EasyDry Quito Norte"
+  region                  String? // Nombre textual (e.g. "Pichincha", "Sierra")
+  direccion               String?
+  telefono                String?
+  email                   String?
+  numeroBahias            Int     @default(0) // Capacidad máxima de bahías
+  maxLavadoresPorBahia    Int     @default(1) // Máximo de lavadores simultáneos por bahía
   /// true: se pueden registrar varias OT en proceso en la misma bahía; false: una bahía con un vehículo en proceso no recibe otra OT.
   permiteVariasOtPorBahia Boolean @default(true)
-  estado               Int     @default(1) // 1 activo, 0 inactivo
+  estado                  Int     @default(1) // 1 activo, 0 inactivo
 
   // Servicios del catálogo que la agencia ofrece (origen de verdad en base)
   tieneServiciosEspeciales Boolean @default(false) // Si la agencia tiene activos los servicios especiales
@@ -228,7 +237,7 @@ model Agencia {
 
   // Cliente corporativo / franquiciador
   clienteId String?
-  cliente   Cliente? @relation(fields: [clienteId], references: [id])
+  cliente   Cliente?         @relation(fields: [clienteId], references: [id])
   /// Sello del jefe de taller de la agencia: firma sus informes de inspección sin tener que elegirlo. Sin sello, el taller firma con nombre escrito.
   selloId   String?
   sello     SelloJefeTaller? @relation(fields: [selloId], references: [id], onDelete: SetNull)
@@ -479,9 +488,9 @@ model ConsumoServicioEspecial {
   pulidorId     String
 
   // Snapshot congelado al momento del consumo (ver ConsumoServicio).
-  insumoNombre  String @default("")
-  insumoSKU     String @default("")
-  unidadSimbolo String @default("")
+  insumoNombre     String   @default("")
+  insumoSKU        String   @default("")
+  unidadSimbolo    String   @default("")
   costoUnitarioUSD Decimal? @db.Decimal(14, 6)
   costoTotalUSD    Decimal? @db.Decimal(12, 4)
 
@@ -852,9 +861,9 @@ model MovimientoInventario {
   usuarioRecibeId   String?
   usuarioRecibe     User?   @relation("RecibeMovimiento", fields: [usuarioRecibeId], references: [id])
 
-  fechaDespacho   DateTime            @default(now())
-  fechaRecepcion  DateTime?
-  observaciones   String?
+  fechaDespacho  DateTime  @default(now())
+  fechaRecepcion DateTime?
+  observaciones  String?
 
   /// Envío entre agencias creado por un líder: pasa por aprobación y exige foto al enviar y al recibir.
   requiereAprobacion Boolean   @default(false)
@@ -1039,6 +1048,12 @@ enum TipoNotificacion {
   DESPACHO_PENDIENTE
   LIMPIEZA_RECORDATORIO
   LIMPIEZA_ATRASADA
+  LIMPIEZA_RECHAZADA
+  LIMPIEZA_APROBADA
+  INCIDENCIA_EN_CAMINO
+  INCIDENCIA_ATENDIENDO
+  MANTENIMIENTO_EN_CAMINO
+  MANTENIMIENTO_ATENDIENDO
   SERVICIO_DECIDIDO
   SERVICIO_ESPECIAL_ASIGNADO
   SERVICIO_ESPECIAL_CERRADO
@@ -1201,10 +1216,19 @@ model LimpiezaMaquinaria {
   observaciones   String?
   registradoPorId String
   registradoPor   User       @relation("LimpiezaRegistradaPor", fields: [registradoPorId], references: [id])
+  /// Revisión del coordinador de mantenimiento: PENDIENTE | APROBADA | RECHAZADA. Una limpieza rechazada que se vuelve a subir vuelve a PENDIENTE.
+  estadoRevision  String     @default("PENDIENTE")
+  revisadoPorId   String?
+  revisadoPor     User?      @relation("LimpiezaRevisadaPor", fields: [revisadoPorId], references: [id])
+  fechaRevision   DateTime?
+  /// Obligatorio al rechazar: por qué no se aprobó la limpieza.
+  motivoRechazo   String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   @@unique([maquinariaId, fecha])
+  @@index([estadoRevision])
+  @@index([revisadoPorId])
   @@index([maquinariaId])
   @@index([fecha])
   @@index([registradoPorId])
@@ -1232,14 +1256,17 @@ model IncidenteTecnico {
   resueltoPor   User?   @relation("ResueltoPor", fields: [resueltoPorId], references: [id])
 
   /// Quién canceló la incidencia, cuándo y por qué (queda también en la línea de tiempo de la máquina).
-  canceladoPorId     String?
-  canceladoPor       User?     @relation("CanceladoPor", fields: [canceladoPorId], references: [id])
-  fechaCancelacion   DateTime?
-  motivoCancelacion  String?
+  canceladoPorId    String?
+  canceladoPor      User?     @relation("CanceladoPor", fields: [canceladoPorId], references: [id])
+  fechaCancelacion  DateTime?
+  motivoCancelacion String?
 
   tecnicoAsignadoId String?
   tecnicoAsignado   User?     @relation("TecnicoAsignadoIncidente", fields: [tecnicoAsignadoId], references: [id])
   fechaAsignacion   DateTime?
+  /// Avance de la atención: Asignado (con técnico) → En camino → Atendiendo → Resuelto. Se reinician al reasignar.
+  fechaEnCamino     DateTime?
+  fechaAtendiendo   DateTime?
 
   destinoTallerId String?
   destinoTaller   Agencia? @relation("DestinoTallerIncidente", fields: [destinoTallerId], references: [id])
@@ -1289,9 +1316,15 @@ model MantenimientoMaquinaria {
   id           String     @id @default(uuid())
   maquinariaId String
   maquinaria   Maquinaria @relation(fields: [maquinariaId], references: [id], onDelete: Cascade)
-  /// Sin técnico mientras nadie lo ha tomado: se programa primero y se asigna después.
+  /// Sin técnico mientras nadie lo ha tomado: se programa primero y se asigna después. Es el «asistente» del mantenimiento.
   tecnicoId    String?
   tecnico      User?      @relation(fields: [tecnicoId], references: [id])
+  /// Avance de la atención: Asignado (con técnico) → En camino → Atendiendo → Finalizado. Se reinician al reasignar.
+  fechaEnCamino   DateTime?
+  fechaAtendiendo DateTime?
+  /// Coordinador de mantenimiento responsable. Opcional al programar; obligatorio al asignar.
+  coordinadorId String?
+  coordinador   User?     @relation("MantenimientoCoordinador", fields: [coordinadorId], references: [id])
 
   estado          String   @default("FINALIZADO") // "PENDIENTE" | "EN_PROCESO" | "FINALIZADO"
   observaciones   String?
@@ -1316,6 +1349,7 @@ model MantenimientoMaquinaria {
 
   @@index([maquinariaId])
   @@index([tecnicoId])
+  @@index([coordinadorId])
   @@index([estado])
   @@index([fechaProgramada])
   @@index([creadoPorId])
@@ -1455,20 +1489,20 @@ model HistorialAsignacionBahia {
 /// Cada cambio de agencia de lavadores, líderes, pulidores, auxiliares y backups, con fecha y hora, quién lo hizo y por qué.
 /// Los nombres se guardan tal como eran en ese momento. Nunca se borra.
 model HistorialCambioAgencia {
-  id                    String   @id @default(uuid())
-  usuarioId             String
-  usuario               User     @relation("UsuarioHistorialAgencia", fields: [usuarioId], references: [id])
-  agenciaOrigenId       String?
-  agenciaOrigenNombre   String?
-  agenciaDestinoId      String?
-  agenciaDestinoNombre  String?
+  id                   String   @id @default(uuid())
+  usuarioId            String
+  usuario              User     @relation("UsuarioHistorialAgencia", fields: [usuarioId], references: [id])
+  agenciaOrigenId      String?
+  agenciaOrigenNombre  String?
+  agenciaDestinoId     String?
+  agenciaDestinoNombre String?
   /// ALTA (primera asignación) | CAMBIO (edición de usuario o asignación) | BAHIA (se movió al asignarlo a una bahía de otra agencia)
-  origen                String   @default("CAMBIO")
-  motivo                String
-  realizadoPorId        String?
-  realizadoPor          User?    @relation("RealizadoPorCambioAgencia", fields: [realizadoPorId], references: [id])
-  realizadoPorNombre    String?
-  createdAt             DateTime @default(now())
+  origen               String   @default("CAMBIO")
+  motivo               String
+  realizadoPorId       String?
+  realizadoPor         User?    @relation("RealizadoPorCambioAgencia", fields: [realizadoPorId], references: [id])
+  realizadoPorNombre   String?
+  createdAt            DateTime @default(now())
 
   @@index([usuarioId])
   @@index([createdAt])
@@ -1520,6 +1554,8 @@ model ServicioEspecial {
   clientUuid          String?                    @unique
   codigoSE            String                     @unique // e.g. "SE-2026-001" o número de OT
   ordenTrabajoOT      String? // Número de Orden de Trabajo digitalizado
+  /// Ticket del servicio (opcional): letras o números, hasta 10 caracteres. Null = el servicio no es por ticket.
+  ticket              String?
   tipoServicio        String // 'Pulido' | 'Micro Pulido' | 'Recubrimiento Cerámico' | 'Lavado de motor' | 'Tratamientos especiales'
   servicioCatalogoId  Int?
   catalogo            CatalogoServicio?          @relation(fields: [servicioCatalogoId], references: [id])
@@ -1579,6 +1615,7 @@ model ServicioEspecial {
   consumos ConsumoServicioEspecial[]
 
   @@index([ordenTrabajoOT])
+  @@index([ticket])
   @@index([estado])
   @@index([placa])
   @@index([agenciaId])
@@ -1734,40 +1771,40 @@ model LimiteSolicitud {
 // actividades, planes de acción, calificación del servicio y cuatro firmas. Nunca se borra de verdad (deletedAt).
 // =========================================================================
 model InformeInspeccion {
-  id                      String    @id @default(uuid())
+  id                      String           @id @default(uuid())
   /// Identificador legible y único: INF-AAAA-NNNN
-  numero                  String    @unique
+  numero                  String           @unique
   /// INFORME MENSUAL N.º: correlativo del informe de esa agencia dentro del mes (`periodo`)
   numeroMensual           Int
   /// AAAA-MM de la fecha del informe
   periodo                 String
   agenciaId               String
-  agencia                 Agencia   @relation(fields: [agenciaId], references: [id])
+  agencia                 Agencia          @relation(fields: [agenciaId], references: [id])
   /// DE: quien elabora el informe (el usuario autenticado)
   inspectorId             String
-  inspector               User      @relation("InformeInspector", fields: [inspectorId], references: [id])
+  inspector               User             @relation("InformeInspector", fields: [inspectorId], references: [id])
   /// PARA: un usuario del sistema o un destinatario escrito a mano
   destinatarioId          String?
   destinatarioNombre      String
-  fecha                   DateTime  @db.Date
+  fecha                   DateTime         @db.Date
   fechaVisita             DateTime
-  /// Tipo de informe: RUTINA | SEGUIMIENTO | EXTRAORDINARIA | CIERRE_MENSUAL | APERTURA_AGENCIA | CIERRE_AGENCIA | NOVEDADES | MANTENIMIENTO_COMERCIAL | COLISION
-  tipoInspeccion          String    @default("RUTINA")
+  /// Tipo de informe: RUTINA | SEGUIMIENTO | EXTRAORDINARIA | CIERRE_MENSUAL | APERTURA_AGENCIA | CIERRE_AGENCIA | NOVEDADES | MANTENIMIENTO_COMERCIAL | COLISION | REPARACION
+  tipoInspeccion          String           @default("RUTINA")
   /// BORRADOR | EN_REVISION | PENDIENTE_FIRMAS | APROBADO | RECHAZADO | CERRADO
-  estado                  String    @default("BORRADOR")
-  asunto                  String    @default("")
-  antecedentes            String    @default("")
-  desarrollo              String    @default("")
-  actividadesGeneral      String    @default("")
-  planesGeneral           String    @default("")
-  observacionesJefeTaller String    @default("")
+  estado                  String           @default("BORRADOR")
+  asunto                  String           @default("")
+  antecedentes            String           @default("")
+  desarrollo              String           @default("")
+  actividadesGeneral      String           @default("")
+  planesGeneral           String           @default("")
+  observacionesJefeTaller String           @default("")
   /// EXCELENTE | BUENO | REGULAR | MALO
   calificacion            String?
   calificadoPorId         String?
   calificadoPorNombre     String?
   calificadoEn            DateTime?
   /// Flujo configurable: qué firmas (RESPONSABLE, JEFE_TALLER, LIDER_BAHIA, RECEPCION) exige el informe para quedar aprobado
-  firmasRequeridas        String[]  @default(["RESPONSABLE", "JEFE_TALLER", "LIDER_BAHIA", "RECEPCION"])
+  firmasRequeridas        String[]         @default(["RESPONSABLE", "JEFE_TALLER", "LIDER_BAHIA", "RECEPCION"])
   motivoRechazo           String?
   enviadoEn               DateTime?
   aprobadoEn              DateTime?
@@ -1776,7 +1813,7 @@ model InformeInspeccion {
   aprobadoPorId           String?
   aprobadoPorNombre       String?
   /// El jefe de taller estuvo en la visita. Si no, el informe se firma y se guarda sin su contraseña ni su firma.
-  jefeTallerPresente      Boolean   @default(true)
+  jefeTallerPresente      Boolean          @default(true)
   /// Cuándo se guardó de forma definitiva (después ya no se puede modificar).
   guardadoEn              DateTime?
   /// Sello del jefe de taller que se validó con su contraseña, con su nombre y logo tal como estaban al validarlo.
@@ -1786,8 +1823,8 @@ model InformeInspeccion {
   selloLogo               String?
   selloValidadoEn         DateTime?
   deletedAt               DateTime?
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 
   novedades   InformeNovedad[]
   actividades InformeActividad[]
@@ -1896,16 +1933,16 @@ model InformePlanAccion {
 
 /// Usuario al que se adjunta un informe: cuando se aprueba recibe una notificación. No cambia quién puede ver el informe.
 model InformeAdjunto {
-  id                  String            @id @default(uuid())
-  informeId           String
-  informe             InformeInspeccion @relation(fields: [informeId], references: [id], onDelete: Cascade)
-  userId              String
-  user                User              @relation("InformeAdjuntoUsuario", fields: [userId], references: [id])
-  agregadoPorId       String?
-  agregadoPorNombre   String?
-  createdAt           DateTime          @default(now())
+  id                String            @id @default(uuid())
+  informeId         String
+  informe           InformeInspeccion @relation(fields: [informeId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User              @relation("InformeAdjuntoUsuario", fields: [userId], references: [id])
+  agregadoPorId     String?
+  agregadoPorNombre String?
+  createdAt         DateTime          @default(now())
   /// Cuándo se le avisó (una sola vez); nulo mientras el informe no esté aprobado.
-  notificadoEn        DateTime?
+  notificadoEn      DateTime?
 
   @@unique([informeId, userId])
   @@index([userId])
@@ -2141,7 +2178,6 @@ model ArchivadoCandado {
   @@map("archivado_candado")
 }
 
-
 // =========================================================================
 // RRHH — UBICACIONES, TIMBRADAS Y TAREAS DEL PERSONAL
 // Las timbradas son un registro de solo anexar (nadie las edita ni las borra). La hora la pone el servidor.
@@ -2269,19 +2305,19 @@ model TareaRrhh {
 }
 
 model TareaAdjunto {
-  id          String    @id @default(uuid())
-  tareaId     String
-  tarea       TareaRrhh @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid())
+  tareaId      String
+  tarea        TareaRrhh @relation(fields: [tareaId], references: [id], onDelete: Cascade)
   /// ASIGNACION (lo que adjunta quien asigna) | RESPUESTA (la evidencia del responsable)
-  etapa       String
-  key         String
-  nombre      String
-  mime        String
+  etapa        String
+  key          String
+  nombre       String
+  mime         String
   tamanioBytes Int
   /// IMAGEN | VIDEO | DOCUMENTO
-  tipo        String
-  subidoPorId String
-  createdAt   DateTime  @default(now())
+  tipo         String
+  subidoPorId  String
+  createdAt    DateTime  @default(now())
 
   @@index([tareaId])
   @@map("tareas_rrhh_adjuntos")
@@ -2315,4 +2351,150 @@ model UbicacionCambio {
 
   @@index([sitioTipo, sitioId])
   @@map("ubicacion_cambios")
+}
+
+// ───────────────────────── Dotaciones (RRHH) ─────────────────────────
+
+/// Categoría de producto creada por el super admin (Uniformes, EPP, …).
+model CategoriaDotacion {
+  id        String   @id @default(uuid())
+  nombre    String   @unique
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productos ProductoDotacion[]
+
+  @@map("dotaciones_categorias")
+}
+
+/// Producto con stock propio (separado del inventario de insumos).
+model ProductoDotacion {
+  id          String            @id @default(uuid())
+  nombre      String
+  categoriaId String
+  categoria   CategoriaDotacion @relation(fields: [categoriaId], references: [id])
+  stock       Int               @default(0)
+  activo      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  movimientos  MovimientoDotacion[]
+  itemsPlan    PlanDotacionItem[]
+  itemsEntrega EntregaDotacionItem[]
+
+  @@unique([categoriaId, nombre])
+  @@index([categoriaId])
+  @@map("dotaciones_productos")
+}
+
+/// Cada ingreso, entrega o ajuste de stock. Inmutable.
+model MovimientoDotacion {
+  id           String           @id @default(uuid())
+  productoId   String
+  producto     ProductoDotacion @relation(fields: [productoId], references: [id])
+  /// INGRESO | SALIDA | AJUSTE
+  tipo         String
+  /// Positiva en INGRESO; en SALIDA la cantidad entregada (el stock baja); en AJUSTE puede ser negativa.
+  cantidad     Int
+  stockDespues Int
+  nota         String?
+  entregaId    String?
+  actorId      String
+  createdAt    DateTime         @default(now())
+
+  @@index([productoId, createdAt])
+  @@index([entregaId])
+  @@map("dotaciones_movimientos")
+}
+
+/// Qué se entrega, a quién (roles y/o agencias) y cuándo (fijo cada N meses u ocasional en una fecha).
+model PlanDotacion {
+  id          String   @id @default(uuid())
+  nombre      String
+  /// FIJO (se repite cada `cadaMeses`) | OCASIONAL (una sola fecha)
+  tipo        String
+  fechaInicio DateTime @db.Date
+  cadaMeses   Int?
+  /// Nombres de rol a los que aplica (vacío = todos los roles).
+  roles       String[] @default([])
+  /// Ids de agencia a las que aplica (vacío = todas).
+  agenciasIds String[] @default([])
+  activo      Boolean  @default(true)
+  creadoPorId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items    PlanDotacionItem[]
+  entregas EntregaDotacion[]
+
+  @@index([activo])
+  @@map("dotaciones_planes")
+}
+
+model PlanDotacionItem {
+  id         String           @id @default(uuid())
+  planId     String
+  plan       PlanDotacion     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  productoId String
+  producto   ProductoDotacion @relation(fields: [productoId], references: [id])
+  cantidad   Int
+
+  @@unique([planId, productoId])
+  @@map("dotaciones_planes_items")
+}
+
+/// Entrega pendiente (o hecha) de un plan a una persona en una fecha.
+model EntregaDotacion {
+  id              String       @id @default(uuid())
+  planId          String
+  plan            PlanDotacion @relation(fields: [planId], references: [id])
+  personaId       String
+  persona         User         @relation(fields: [personaId], references: [id])
+  fechaProgramada DateTime     @db.Date
+  /// PENDIENTE | ENTREGADA | OMITIDA
+  estado          String       @default("PENDIENTE")
+  entregadaEn     DateTime?
+  entregadaPorId  String?
+  nota            String?
+  /// Agencia y región de la persona al generarse (para filtrar y archivar).
+  agenciaId       String?
+  regionId        String?
+  createdAt       DateTime     @default(now())
+
+  items      EntregaDotacionItem[]
+  evidencias EntregaDotacionEvidencia[]
+
+  @@unique([planId, personaId, fechaProgramada])
+  @@index([estado, fechaProgramada])
+  @@index([personaId])
+  @@map("dotaciones_entregas")
+}
+
+model EntregaDotacionItem {
+  id                String           @id @default(uuid())
+  entregaId         String
+  entrega           EntregaDotacion  @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+  productoId        String
+  producto          ProductoDotacion @relation(fields: [productoId], references: [id])
+  cantidadPlan      Int
+  cantidadEntregada Int?
+
+  @@index([entregaId])
+  @@map("dotaciones_entregas_items")
+}
+
+model EntregaDotacionEvidencia {
+  id           String          @id @default(uuid())
+  entregaId    String
+  entrega      EntregaDotacion @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+  key          String
+  nombre       String
+  mime         String
+  tamanioBytes Int
+  subidoPorId  String
+  createdAt    DateTime        @default(now())
+
+  @@index([entregaId])
+  @@map("dotaciones_entregas_evidencias")
 }
