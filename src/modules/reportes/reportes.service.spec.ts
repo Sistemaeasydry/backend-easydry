@@ -51,7 +51,7 @@ describe('catálogo según los módulos activos del rol', () => {
 
   it('SUPER_ADMIN ve todos los reportes', () => {
     const { servicio } = crear();
-    expect(servicio.catalogo(usuario('SUPER_ADMIN', 'GLOBAL', []))).toHaveLength(18);
+    expect(servicio.catalogo(usuario('SUPER_ADMIN', 'GLOBAL', []))).toHaveLength(19);
   });
 });
 
@@ -112,7 +112,7 @@ describe('generar', () => {
 
     expect(r.grupos.map((g) => g.titulo)).toEqual(['Agencia Norte', 'Agencia Sur']);
     const norte = r.grupos[0];
-    expect(norte).toMatchObject({ region: 'Sierra', cliente: 'Toyota', responsable: 'Luis Mora' });
+    expect(norte).toMatchObject({ region: 'Sierra', cliente: 'Toyota', responsable: 'Mora Luis' });
     expect(norte.bloques.map((b) => b.etiqueta)).toEqual(['Enero 2026', 'Marzo 2026']);
     expect(r.columnas[0].clave).toBe('ot');
     expect(r.columnas.map((c) => c.clave)).not.toContain('ord');
@@ -142,14 +142,14 @@ describe('aprobación de los servicios', () => {
     const { servicio, prisma } = crear();
     const base = { ordenTrabajoOT: 'OT-1', placa: 'ABC-123', marca: null, modelo: 'Rio', color: null, precio: 10, observaciones: null, horaIngreso: new Date('2026-01-10T15:00:00Z'), horaSalida: null, bahia: { agenciaId: 'ag-a' }, catalogo: { nombre: 'Lavado' }, operador: null, operadoresAsignados: [] };
     prisma.servicioLavado.findMany.mockResolvedValue([
-      { ...base, estado: 'APROBADO', aprobadoPor: 'Luis Mora' },
+      { ...base, estado: 'APROBADO', aprobadoPor: 'Mora Luis' },
       { ...base, estado: 'RECHAZADO', aprobadoPor: 'Ana Ríos' },
       { ...base, estado: 'FINALIZADO', aprobadoPor: null },
     ]);
     const r = await servicio.generar({ reporteId: 'servicios-lavado', categoria: 'GENERAL', periodo: periodoAnio }, admin);
     const filas = r.grupos[0].bloques[0].filas;
     expect(filas.map((f) => f.aprobado)).toEqual(['SI', 'NO', '']);
-    expect(filas.map((f) => f.aprobadoPor)).toEqual(['Luis Mora', 'Ana Ríos', '']);
+    expect(filas.map((f) => f.aprobadoPor)).toEqual(['Mora Luis', 'Ana Ríos', '']);
     expect(r.totales.find((t) => t.clave === 'aprobados')?.valor).toBe(1);
     expect(r.totales.find((t) => t.clave === 'rechazados')?.valor).toBe(1);
   });
@@ -160,12 +160,12 @@ describe('aprobación de los servicios', () => {
     prisma.servicioEspecial.findMany.mockResolvedValue([{ ...base, id: 's1' }, { ...base, id: 's2' }, { ...base, id: 's3' }]);
     prisma.auditoriaDecision.findMany.mockResolvedValue([
       { entidadId: 's1', accion: 'RECHAZAR', usuarioNombre: 'Pedro' },
-      { entidadId: 's1', accion: 'APROBAR', usuarioNombre: 'Luis Mora' },
+      { entidadId: 's1', accion: 'APROBAR', usuarioNombre: 'Mora Luis' },
       { entidadId: 's2', accion: 'RECHAZAR', usuarioNombre: 'Ana Ríos' },
     ]);
     const r = await servicio.generar({ reporteId: 'servicios-lavado', categoria: 'ESPECIAL', periodo: periodoAnio }, admin);
     const filas = r.grupos[0].bloques[0].filas;
-    expect(filas.map((f) => [f.aprobado, f.aprobadoPor])).toEqual([['SI', 'Luis Mora'], ['NO', 'Ana Ríos'], ['', '']]);
+    expect(filas.map((f) => [f.aprobado, f.aprobadoPor])).toEqual([['SI', 'Mora Luis'], ['NO', 'Ana Ríos'], ['', '']]);
   });
 });
 
@@ -279,9 +279,9 @@ describe('reportes de productividad', () => {
     const norte = r.grupos.find((g) => g.titulo === 'Agencia Norte')!;
     const febrero = norte.bloques.find((b) => b.etiqueta === 'Febrero 2026')!;
     // En febrero el servicio compartido cuenta una vez para cada operario y su monto se divide entre los dos.
-    expect(febrero.filas.map((f) => [f.operario, f.realizados, f.monto])).toEqual([['Ana Mora', 1, 5], ['Beto Ríos', 1, 5]]);
+    expect(febrero.filas.map((f) => [f.operario, f.realizados, f.monto])).toEqual([['Mora Ana', 1, 5], ['Ríos Beto', 1, 5]]);
     const enero = norte.bloques.find((b) => b.etiqueta === 'Enero 2026')!;
-    expect(enero.filas[0]).toMatchObject({ posicion: 1, operario: 'Ana Mora', rol: 'Lavador', realizados: 2 });
+    expect(enero.filas[0]).toMatchObject({ posicion: 1, operario: 'Mora Ana', rol: 'Lavador', realizados: 2 });
   });
 
   it('sin permiso de precios no salen los montos', async () => {

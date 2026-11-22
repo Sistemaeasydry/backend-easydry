@@ -23,6 +23,7 @@ import type { GenerarReporteDto, RegistrarExportacionDto } from './dto/reportes.
 import { RetosService } from '../retos/retos.service.js';
 import { ReportesArchivoService } from './reportes.archivo.js';
 import { CacheService } from '../../common/cache/cache.service.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** Desde cuántas filas la pantalla avisa antes de exportar (no es un tope: se puede exportar igual). */
 export const UMBRALES_ADVERTENCIA = { PDF: 2000, EXCEL: 20000 } as const;
@@ -92,10 +93,13 @@ interface Ctx {
   incluyeBodegas: boolean;
 }
 
-const nombreDe = (u?: { name?: string | null; lastname?: string | null } | null): string => (u ? `${u.name ?? ''} ${u.lastname ?? ''}`.trim() : '');
+const nombreDe = (u?: { name?: string | null; lastname?: string | null } | null): string => (u ? apellidosNombres(u) : '');
 const titulo = (s?: string | null): string => (s ? `${s.charAt(0).toUpperCase()}${s.slice(1).toLowerCase().replace(/_/g, ' ')}` : '');
 /** Reportes que puede sacar el aprobador: solo los de sus servicios. */
 const REPORTES_DEL_APROBADOR = ['servicios-lavado'];
+
+/** Nombre de cada tipo de informe de inspección tal como se ve en la pantalla (con sus tildes). */
+const TIPO_INSPECCION: Record<string, string> = { RUTINA: 'Rutina', SEGUIMIENTO: 'Seguimiento', EXTRAORDINARIA: 'Extraordinaria', CIERRE_MENSUAL: 'Cierre mensual', APERTURA_AGENCIA: 'Apertura de agencia', CIERRE_AGENCIA: 'Cierre de agencia', NOVEDADES: 'Novedades', MANTENIMIENTO_COMERCIAL: 'Mantenimiento comercial', COLISION: 'Colisión', REPARACION: 'Reparación' };
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 const dinero = (v: unknown): number | null => (v === null || v === undefined ? null : Math.round(Number(v) * 100) / 100);
@@ -392,6 +396,7 @@ export class ReportesService {
       case 'maquinaria-asignada': return this.maquinariaAsignada(ctx);
       case 'incidentes': return this.incidentes(ctx);
       case 'mantenimientos': return this.mantenimientos(ctx);
+      case 'limpiezas': return this.limpiezas(ctx);
       case 'insumos-inventario': return this.insumosInventario(ctx);
       case 'stock-ubicacion': return this.stockUbicacion(ctx);
       case 'alertas-stock': return this.alertasStock(ctx);
@@ -594,7 +599,7 @@ export class ReportesService {
         ...(dto.pulidorId ? { AND: [{ OR: [{ operadorId: dto.pulidorId }, { operadoresAsignados: { some: { operadorId: dto.pulidorId } } }] }] } : {}),
       },
       select: {
-        id: true, codigoSE: true, ordenTrabajoOT: true, tipoServicio: true, operadorId: true, placa: true, marca: true, modelo: true, color: true, estado: true, precio: true, agenciaId: true,
+        id: true, codigoSE: true, ordenTrabajoOT: true, ticket: true, tipoServicio: true, operadorId: true, placa: true, marca: true, modelo: true, color: true, estado: true, precio: true, agenciaId: true,
         observaciones: true, creadoPorNombre: true, fechaProgramada: true, createdAt: true, horaIngreso: true, fechaInicio: true, fechaFin: true,
       },
       orderBy: [{ fechaProgramada: 'asc' }, { createdAt: 'asc' }],
@@ -626,6 +631,7 @@ export class ReportesService {
           horaIngreso: s.horaIngreso || (s.fechaInicio ? horaEcuador(s.fechaInicio) : ''),
           horaSalida: s.fechaFin ? horaEcuador(s.fechaFin) : '',
           ot: s.ordenTrabajoOT || s.codigoSE,
+          ticket: (s as { ticket?: string | null }).ticket ?? '',
           placa: s.placa,
           marca: s.marca ?? '',
           modelo: s.modelo ?? '',
@@ -742,6 +748,66 @@ export class ReportesService {
         costo: dinero(m.costoTotal),
       },
     }));
+  }
+
+  /**
+   * Limpieza de maquinaria por día: para cada máquina activa de las agencias del alcance y cada día del periodo en que tocaba
+   * limpiarla (agencia: miércoles y sábado; con pulidor asignado: todos los días), si se hizo o no, quién y cómo la revisó el
+   * coordinador. Una limpieza hecha en un día que no tocaba también aparece. No se listan días futuros.
+   */
+  private async limpiezas(ctx: Ctx): Promise<Bruta[]> {
+    const hoy = hoyEcuador();
+    const desde = fechaEcuador(ctx.gte);
+    const hasta = (() => {
+      const h = fechaEcuador(new Date(ctx.lt.getTime() - 1));
+      return h > hoy ? hoy : h;
+    })();
+    if (desde > hasta) return [];
+
+    const dias: string[] = [];
+    for (let d = desde; d <= hasta && dias.length < 400; d = sumarDiasIso(d, 1)) dias.push(d);
+
+    const maquinas = await this.prisma.maquinaria.findMany({
+      where: { agenciaId: { in: ctx.ids }, activa: true },
+      select: { id: true, codigo: true, nombre: true, agenciaId: true, operadorAsignadoId: true, operadorAsignado: { select: { name: true, lastname: true } } },
+      orderBy: { codigo: 'asc' },
+    });
+    if (!maquinas.length) return [];
+
+    const registros = await this.prisma.limpiezaMaquinaria.findMany({
+      where: { maquinariaId: { in: maquinas.map((m) => m.id) }, fecha: { gte: new Date(`${desde}T00:00:00.000Z`), lte: new Date(`${hasta}T00:00:00.000Z`) } },
+      include: { registradoPor: { select: { name: true, lastname: true } } },
+    });
+    const porDia = new Map(registros.map((r) => [`${r.maquinariaId}|${r.fecha.toISOString().slice(0, 10)}`, r]));
+    const REVISION: Record<string, string> = { PENDIENTE: 'Por revisar', APROBADA: 'Aprobada', RECHAZADA: 'No aprobada' };
+
+    const salida: Bruta[] = [];
+    for (const m of maquinas) {
+      const regla = m.operadorAsignadoId ? 'PULIDOR' : 'AGENCIA';
+      for (const dia of dias) {
+        const dow = new Date(`${dia}T12:00:00Z`).getUTCDay();
+        const toca = regla === 'PULIDOR' || dow === 3 || dow === 6;
+        const reg = porDia.get(`${m.id}|${dia}`);
+        if (!toca && !reg) continue;
+        const estado = reg ? 'Realizada' : 'No realizada';
+        if (ctx.dto.estado && ctx.dto.estado !== (reg ? 'REALIZADA' : 'NO_REALIZADA')) continue;
+        salida.push({
+          grupo: m.agenciaId!,
+          fecha: dia,
+          fila: {
+            fecha: dia,
+            maquina: `${m.codigo} · ${m.nombre}`,
+            regla: regla === 'PULIDOR' ? `Diaria · ${nombreDe(m.operadorAsignado)}` : 'Miércoles y sábado',
+            estado,
+            registradoPor: reg ? nombreDe(reg.registradoPor) : '',
+            revision: reg ? (REVISION[reg.estadoRevision] ?? titulo(reg.estadoRevision)) : '',
+            motivo: reg?.motivoRechazo ?? '',
+            fotos: reg ? reg.fotos.length : 0,
+          },
+        });
+      }
+    }
+    return salida.sort((a, b) => (a.fecha! < b.fecha! ? -1 : a.fecha! > b.fecha! ? 1 : String(a.fila['maquina']).localeCompare(String(b.fila['maquina']))));
   }
 
   /**
@@ -1258,7 +1324,7 @@ export class ReportesService {
       return {
         grupo: i.agenciaId,
         fecha: dia,
-        fila: { _id: i.id, numero: i.numero, fecha: dia, tipo: titulo(i.tipoInspeccion), estado: titulo(i.estado), inspector: nombreDe(i.inspector), destinatario: i.destinatarioNombre, asunto: i.asunto, calificacion: titulo(i.calificacion) },
+        fila: { _id: i.id, numero: i.numero, fecha: dia, tipo: TIPO_INSPECCION[i.tipoInspeccion] ?? titulo(i.tipoInspeccion), estado: titulo(i.estado), inspector: nombreDe(i.inspector), destinatario: i.destinatarioNombre, asunto: i.asunto, calificacion: titulo(i.calificacion) },
       };
     });
   }

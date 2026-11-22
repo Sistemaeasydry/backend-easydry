@@ -112,7 +112,11 @@ export function columnasServicios(categoria: CategoriaServicios): ColumnaDef[] {
     col('aprobadoPor', 'Aprobado por', 'texto', 15),
     col('precio', 'Precio', 'dinero', 9, { soloPrecios: true }),
   ];
-  return categoria === 'GENERAL' ? comunes([col('lavador', 'Lavador', 'texto', 13)]) : comunes([col('asesor', 'Asesor', 'texto', 13)]);
+  if (categoria === 'GENERAL') return comunes([col('lavador', 'Lavador', 'texto', 13)]);
+  // Los especiales llevan además el ticket (vacío si el servicio no es por ticket).
+  const columnas = comunes([col('asesor', 'Asesor', 'texto', 13)]);
+  columnas.splice(1, 0, col('ticket', 'Ticket', 'texto', 9));
+  return columnas;
 }
 
 export const REPORTES: readonly ReporteDef[] = [
@@ -286,6 +290,38 @@ export const REPORTES: readonly ReporteDef[] = [
       cuenta(f),
       { clave: 'finalizados', etiqueta: 'Finalizados', valor: contar(f, 'estado', 'Finalizado'), tipo: 'numero' },
       { clave: 'costo', etiqueta: 'Costo', valor: sumar(f, 'costo'), tipo: 'dinero' },
+    ],
+  },
+  {
+    id: 'limpiezas',
+    nombre: 'Limpieza de maquinaria',
+    modulo: 'Gestión de maquinaria',
+    descripcion: 'Qué día se hizo la limpieza de cada máquina y qué días no (agencia: miércoles y sábado; con pulidor asignado: todos los días), con su revisión.',
+    permisos: ['limpiezas.ver'],
+    periodo: true,
+    agrupar: 'AGENCIA',
+    plantilla: 'TABLA',
+    extras: ['estado'],
+    estados: [
+      { valor: 'REALIZADA', etiqueta: 'Realizada' },
+      { valor: 'NO_REALIZADA', etiqueta: 'No realizada' },
+    ],
+    columnas: [
+      ORD,
+      col('fecha', 'Día', 'fecha', 9),
+      col('maquina', 'Máquina', 'texto', 17),
+      col('regla', 'Regla', 'texto', 11),
+      col('estado', 'Limpieza', 'texto', 10),
+      col('registradoPor', 'Registró', 'texto', 15),
+      col('revision', 'Revisión', 'texto', 10),
+      col('motivo', 'Motivo del rechazo', 'texto', 20),
+      col('fotos', 'Fotos', 'numero', 6),
+    ],
+    totales: (f) => [
+      cuenta(f),
+      { clave: 'realizadas', etiqueta: 'Realizadas', valor: contar(f, 'estado', 'Realizada'), tipo: 'numero' },
+      { clave: 'noRealizadas', etiqueta: 'No realizadas', valor: contar(f, 'estado', 'No realizada'), tipo: 'numero' },
+      { clave: 'rechazadas', etiqueta: 'No aprobadas', valor: contar(f, 'revision', 'No aprobada'), tipo: 'numero' },
     ],
   },
   {
