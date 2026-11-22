@@ -322,10 +322,10 @@ describe('RetosService (base real)', () => {
 
       const r: any = await service.ranking(reto.id, actores.admin);
       expect(r.participantes[0].personas).toEqual([
-        { id: ids.pedro, nombre: 'pedro Mora', servicios: 2 }, // la cédula pegada al apellido se quita
-        { id: ids.luis, nombre: 'luis Prueba', servicios: 1 },
+        { id: ids.pedro, nombre: 'Mora pedro', servicios: 2 }, // la cédula pegada al apellido se quita
+        { id: ids.luis, nombre: 'Prueba luis', servicios: 1 },
       ]);
-      expect(r.participantes[1].personas).toEqual([{ id: ids.sara, nombre: 'sara Prueba', servicios: null }]);
+      expect(r.participantes[1].personas).toEqual([{ id: ids.sara, nombre: 'Prueba sara', servicios: null }]);
     });
 
     it('pulidores: solo especiales completados, y un servicio compartido cuenta para cada asignado', async () => {
@@ -345,8 +345,8 @@ describe('RetosService (base real)', () => {
       const r: any = await service.ranking(reto.id, actores.admin);
       expect(r.participantes.map((p: any) => [p.nombre, p.valor, p.detalle]).sort()).toEqual(
         [
-          ['Moni Prueba', 1, 'Pulidor móvil'],
-          ['Fabi Prueba', 1, a1.nombre],
+          ['Prueba Moni', 1, 'Pulidor móvil'],
+          ['Prueba Fabi', 1, a1.nombre],
         ].sort(),
       );
     });

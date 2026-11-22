@@ -66,8 +66,8 @@ describe('RetosService.list — vigencia (base real)', () => {
       expect(await lista({ vigencia: 'ACTIVOS' }, admin)).toEqual(['activoVencido', 'vigente']);
     });
 
-    it('VENCIDOS: los que ya pasaron su fecha de fin (hoy en Ecuador), sea cual sea su estado', async () => {
-      expect(await lista({ vigencia: 'VENCIDOS' }, admin)).toEqual(['activoVencido', 'finalizadoVencido']);
+    it('VENCIDOS (historial): los que ya pasaron su fecha de fin (hoy en Ecuador) y todo reto finalizado, aunque se cerrara antes de su fecha', async () => {
+      expect(await lista({ vigencia: 'VENCIDOS' }, admin)).toEqual(['activoVencido', 'finalizadoVencido', 'finalizadoVigente']);
     });
 
     it('TODOS: sin filtro de estado ni de fecha', async () => {

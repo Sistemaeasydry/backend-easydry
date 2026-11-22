@@ -1,4 +1,4 @@
-import { FUNCION, rolConFuncion } from '../../common/permisos/funciones.js';
+import { FUNCION, rolConFuncion, tieneFuncion } from '../../common/permisos/funciones.js';
 import { BadRequestException, ForbiddenException, Injectable, Logger, Optional, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -27,6 +27,7 @@ import {
   type ServicioContado,
   type TipoServicioReto,
 } from './retos.reglas.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 
 /** "Todas" (o nada) significa sin filtro. */
@@ -54,11 +55,15 @@ export class RetosService {
       if (dto.vigencia === 'ACTIVOS') {
         where.estado = 'ACTIVO';
       } else if (dto.vigencia === 'VENCIDOS') {
-        where.fechaFin = { lt: hoyEcuador() };
+        // Historial: los que ya pasaron su fecha fin o se cerraron antes (un cierre manual no deja de pertenecer al historial).
+        where.OR = [{ estado: 'FINALIZADO' }, { fechaFin: { lt: hoyEcuador() } }];
       }
     } else if (dto.soloActivos !== false && !dto.incluirTodos) {
       where.estado = 'ACTIVO';
     }
+
+    const filtroTipo = await this.filtroTipoServicio(user);
+    if (filtroTipo) where.AND = [...(where.AND || []), filtroTipo];
 
     // Quien actúa en todo el país (administradores, jefe comercial) ve todos los retos; el resto, los de su región o agencia.
     if (resolverAlcance(user).tipo !== 'GLOBAL') {
@@ -204,7 +209,7 @@ export class RetosService {
         catalogoServicioId: catalogoServicioIds[0] ?? null,
         catalogoServicioIds,
         creadoPorId: user?.id ? String(user.id) : null,
-        creadorNombre: String(user?.nombre || `${user?.name || ''} ${user?.lastname || ''}`).trim() || null,
+        creadorNombre: String(user?.nombre || apellidosNombres(user)).trim() || null,
         creadorRol: this.roleCode(user) || null,
       },
     });
@@ -217,7 +222,7 @@ export class RetosService {
   async ranking(id: string, user: any) {
     const reto = await this.prisma.reto.findUnique({ where: { id } });
     if (!reto) throw new NotFoundException('Reto no encontrado.');
-    if (!this.esVisibleParaUsuario(reto, user)) {
+    if (!(await this.visiblePorTipoServicio(reto, user)) || !this.esVisibleParaUsuario(reto, user)) {
       throw new ForbiddenException('No tienes acceso al ranking de este reto.');
     }
     const filas = await this.calcularRankingReto(reto);
@@ -261,7 +266,7 @@ export class RetosService {
     });
     return personas.map((p: any) => ({
       id: p.id,
-      nombre: `${p.name} ${p.lastname}`.trim(),
+      nombre: apellidosNombres(p),
       regionNombre: p.agencia?.regionRel?.nombre || p.region?.nombre || '',
       agenciaId: p.agencia?.id || '',
       agenciaNombre: p.agencia?.nombre || (tipo === 'PULIDOR' ? 'Pulidor móvil' : 'Sin agencia'),
@@ -318,7 +323,7 @@ export class RetosService {
       : [];
     // Algunos nombres de lavadores traen la cédula pegada: "Juan Pérez (CI: ...)".
     const nombre = new Map<string, string>(
-      (usuarios as any[]).map((u) => [u.id, `${u.name} ${u.lastname}`.replace(/\s*\(CI:[^)]*\)\s*$/i, '').trim()]),
+      (usuarios as any[]).map((u) => [u.id, apellidosNombres(u).replace(/\s*\(CI:[^)]*\)\s*$/i, '').trim()]),
     );
 
     return filas.map((f) => {
@@ -403,7 +408,7 @@ export class RetosService {
     });
     return rows.map((u: any) => ({
       id: u.id,
-      nombre: `${u.name} ${u.lastname}`.trim(),
+      nombre: apellidosNombres(u),
       detalle: u.agencia?.nombre || (tipo === 'PULIDOR' ? 'Pulidor móvil' : undefined),
       agenciaId: u.agenciaId,
       regionId: u.regionId,
@@ -646,6 +651,43 @@ export class RetosService {
 
   private roleCode(user: any): string {
     return rolDeUsuario(user);
+  }
+
+  /**
+   * Retos por tipo de servicio según el perfil: el coordinador regional (comercial) solo ve los de servicios generales y el
+   * coordinador de servicios especiales solo los de servicios especiales. Los retos «para todos» (TODOS) los ven ambos, y los de servicios específicos según la categoría de los servicios elegidos. Otros perfiles: sin restricción (null).
+   */
+  private tiposServicioPermitidos(user: any): string[] | null {
+    if (tieneFuncion(user, FUNCION.COMERCIAL) && !tieneFuncion(user, FUNCION.COMERCIAL_NACIONAL) && !tieneFuncion(user, FUNCION.ADMINISTRADOR)) return ['GENERALES', 'TODOS'];
+    if (tieneFuncion(user, FUNCION.COORD_ESPECIALES) && !tieneFuncion(user, FUNCION.ADMINISTRADOR)) return ['ESPECIALES', 'TODOS'];
+    return null;
+  }
+
+  /** Categoría del catálogo que ve el perfil con restricción (generales o especiales). */
+  private categoriaDelPerfil(tipos: string[]): 'GENERAL' | 'ESPECIAL' {
+    return tipos.includes('GENERALES') ? 'GENERAL' : 'ESPECIAL';
+  }
+
+  /**
+   * Filtro del listado por tipo de servicio. Además de los retos de su tipo y los «para todos», el perfil ve los de
+   * «servicios específicos» si entre los servicios elegidos hay alguno de su categoría (solo especiales, solo generales o ambos).
+   */
+  private async filtroTipoServicio(user: any): Promise<Record<string, unknown> | null> {
+    const tipos = this.tiposServicioPermitidos(user);
+    if (!tipos) return null;
+    const ids = (await this.prisma.catalogoServicio.findMany({ where: { categoria: this.categoriaDelPerfil(tipos) }, select: { id: true } })).map((c) => c.id);
+    return { OR: [{ tipoServicios: { in: tipos } }, { tipoServicios: 'ESPECIFICOS', catalogoServicioIds: { hasSome: ids } }] };
+  }
+
+  /** Misma regla de tipo de servicio que el listado, para un reto concreto (ranking). */
+  private async visiblePorTipoServicio(reto: { tipoServicios?: string | null; catalogoServicioIds?: number[] | null }, user: any): Promise<boolean> {
+    const tipos = this.tiposServicioPermitidos(user);
+    if (!tipos) return true;
+    const t = String(reto.tipoServicios ?? '');
+    if (tipos.includes(t)) return true;
+    if (t !== 'ESPECIFICOS' || !reto.catalogoServicioIds?.length) return false;
+    const coincidentes = await this.prisma.catalogoServicio.count({ where: { id: { in: reto.catalogoServicioIds }, categoria: this.categoriaDelPerfil(tipos) } });
+    return coincidentes > 0;
   }
 
   /** Misma regla que el listado: así el ranking de un reto nunca se ve donde el reto no aparece. */
