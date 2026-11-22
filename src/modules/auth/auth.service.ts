@@ -14,6 +14,7 @@ import { exigirPasswordSegura } from '../../common/utils/password-politica.js';
 import { FUNCION, funcionesDeRol } from '../../common/permisos/funciones.js';
 import { modulosDeRol } from '../../common/permisos/modulos-navegacion.js';
 import { JWT_ACCESS_DEFAULT, JWT_REFRESH_DEFAULT, JWT_SIGN_OPTIONS, JWT_VERIFY_OPTIONS } from './jwt.config.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** Hash descartable (mismo costo que los reales) para comparar cuando el correo no existe. */
 const HASH_SIN_USUARIO = bcrypt.hashSync(randomUUID(), 10);
@@ -181,7 +182,7 @@ export class AuthService {
           entidadId: user.id,
           accion: 'CAMBIAR_PASSWORD_PROPIA',
           usuarioId: user.id,
-          usuarioNombre: `${user.name ?? ''} ${user.lastname ?? ''}`.trim() || user.email,
+          usuarioNombre: apellidosNombres(user) || user.email,
           rol: user.role?.namerol,
           regla: 'ADMIN',
           agenciaId: user.agenciaId ?? null,
@@ -295,7 +296,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         lastname: user.lastname,
-        nombre: `${user.name} ${user.lastname}`.trim(),
+        nombre: apellidosNombres(user),
         roleId: user.roleId,
         role: user.role?.namerol,
         roleCode: user.role?.namerol,
@@ -438,7 +439,9 @@ export class AuthService {
         email: user.email,
         name: user.name,
         lastname: user.lastname,
-        nombre: `${user.name} ${user.lastname}`.trim(),
+        telefono: (user as any).telefono ?? null,
+        cedula: (user as any).cedula ?? null,
+        nombre: apellidosNombres(user),
         roleId: user.roleId,
         role: user.role?.namerol,
         roleCode: user.role?.namerol,
@@ -480,6 +483,8 @@ export class AuthService {
         email: true,
         name: true,
         lastname: true,
+        telefono: true,
+        cedula: true,
         roleId: true,
         role: {
           select: { id: true, namerol: true, permisos: true, acciones: true, capacidades: true, ambito: true, estado: true },
@@ -512,7 +517,7 @@ export class AuthService {
 
     return {
       ...userWithoutRole,
-      nombre: `${user.name} ${user.lastname}`.trim(),
+      nombre: apellidosNombres(user),
       role: role?.namerol,
       roleCode: role?.namerol,
       rolNombre: role?.namerol,
@@ -541,7 +546,27 @@ export class AuthService {
       throw new UnauthorizedException('Usuario no encontrado');
     }
 
-    const data: { avatarUrl?: string | null; name?: string; lastname?: string; email?: string } = {};
+    const data: { avatarUrl?: string | null; name?: string; lastname?: string; email?: string; telefono?: string | null; cedula?: string | null } = {};
+
+    // Cada persona completa su propio celular y cédula (el resto de sus datos los gestiona un administrador).
+    if (dto.telefono !== undefined) {
+      const telefono = dto.telefono.replace(/\s+/g, '');
+      if (telefono && !/^09\d{8}$/.test(telefono)) {
+        throw new BadRequestException('El celular debe tener 10 dígitos y empezar con 09 (ej. 0991234567).');
+      }
+      data.telefono = telefono || null;
+    }
+    if (dto.cedula !== undefined) {
+      const cedula = dto.cedula.replace(/\s+/g, '');
+      if (cedula && !/^\d{10}$/.test(cedula)) {
+        throw new BadRequestException('La cédula debe tener 10 dígitos.');
+      }
+      if (cedula && cedula !== (user as any).cedula) {
+        const repetida = await this.prisma.user.findFirst({ where: { cedula, id: { not: userId } }, select: { id: true } });
+        if (repetida) throw new BadRequestException('Esa cédula ya está registrada en otro usuario.');
+      }
+      data.cedula = cedula || null;
+    }
 
     if (dto.avatarUrl !== undefined) {
       const avatarUrl = dto.avatarUrl.trim();

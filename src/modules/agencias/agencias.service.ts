@@ -83,6 +83,7 @@ import { tieneAlgunPermiso, tienePermiso } from '../../common/permisos/capacidad
 import { exigirPasswordSegura } from '../../common/utils/password-politica.js';
 import { CacheService } from '../../common/cache/cache.service.js';
 import { USUARIO_PREFIJO } from '../auth/jwt.strategy.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 @Injectable()
 export class AgenciasService {
   constructor(
@@ -188,7 +189,7 @@ export class AgenciasService {
           entidadId: objetivoId,
           accion: 'ASIGNAR_PASSWORD',
           usuarioId: String(actor?.id ?? ''),
-          usuarioNombre: `${actor?.name ?? ''} ${actor?.lastname ?? ''}`.trim() || String(actor?.email ?? ''),
+          usuarioNombre: apellidosNombres(actor) || String(actor?.email ?? ''),
           rol: rolDeUsuario(actor),
           regla: this.esAdmin(actor) ? 'ADMIN' : 'DELEGADO',
           agenciaId: agenciaId ?? null,
@@ -341,7 +342,7 @@ export class AgenciasService {
     if (otroFijo) {
       const agencia = await this.prisma.agencia.findUnique({ where: { id: agenciaId }, select: { nombre: true } });
       throw new ConflictException(
-        `La agencia "${agencia?.nombre || agenciaId}" ya tiene un pulidor fijo asignado (${otroFijo.name} ${otroFijo.lastname}). `
+        `La agencia "${agencia?.nombre || agenciaId}" ya tiene un pulidor fijo asignado (${apellidosNombres(otroFijo)}). `
         + `Cada agencia solo puede tener uno: cambia primero a ese pulidor a otra agencia o a modalidad móvil.`,
       );
     }
@@ -402,7 +403,7 @@ export class AgenciasService {
           return {
             ...r,
             usuarios,
-            responsable: supervisor ? `${supervisor.name} ${supervisor.lastname}`.trim() : '',
+            responsable: supervisor ? apellidosNombres(supervisor) : '',
             supervisorId: supervisor?.id || null,
           };
         }),
@@ -466,7 +467,7 @@ export class AgenciasService {
           where: { id: dto.supervisorId },
           data: { regionId: created.id },
         });
-        responsableNombre = `${sup.name} ${sup.lastname}`.trim();
+        responsableNombre = apellidosNombres(sup);
       }
     }
 
@@ -530,7 +531,7 @@ export class AgenciasService {
           where: { id: dto.supervisorId },
           data: { regionId: region.id },
         });
-        responsableNombre = `${sup.name} ${sup.lastname}`.trim();
+        responsableNombre = apellidosNombres(sup);
       } else {
         // Si se envió vacío, desvincular supervisores de la región
         await this.prisma.user.updateMany({
@@ -545,7 +546,7 @@ export class AgenciasService {
         where: { regionId: region.id, role: rolConFuncion(FUNCION.SUPERVISOR) },
       });
       if (sup) {
-        responsableNombre = `${sup.name} ${sup.lastname}`.trim();
+        responsableNombre = apellidosNombres(sup);
         finalSupervisorId = sup.id;
       }
     }
@@ -779,12 +780,12 @@ export class AgenciasService {
         productividad: metrica?.total
           ? Number(((metrica.completados / metrica.total) * 100).toFixed(1))
           : 0,
-        responsable: ger ? `${ger.name} ${ger.lastname}`.trim() : 'Sin Asignar',
+        responsable: ger ? apellidosNombres(ger) : 'Sin Asignar',
         gerenteId: ger?.id || null,
-        gerenteNombre: ger ? `${ger.name} ${ger.lastname}`.trim() : null,
-        liderOperador: lider ? `${lider.name} ${lider.lastname}`.trim() : 'Sin Asignar',
+        gerenteNombre: ger ? apellidosNombres(ger) : null,
+        liderOperador: lider ? apellidosNombres(lider) : 'Sin Asignar',
         liderOperadorId: lider?.id || null,
-        liderOperadorNombre: lider ? `${lider.name} ${lider.lastname}`.trim() : null,
+        liderOperadorNombre: lider ? apellidosNombres(lider) : null,
       };
     });
   }
@@ -880,7 +881,7 @@ export class AgenciasService {
       // El apellido de un operador puede llevar "(CI: …)": no se muestra en la etiqueta.
       mapear: (u) => ({
         value: u.id,
-        label: `${u.name || ''} ${(u.lastname || '').replace(/\(CI:[^)]+\)/, '').replace(/CI:[^)]+/, '').trim()}`.trim() || u.id,
+        label: apellidosNombres({ name: u.name, lastname: (u.lastname || '').replace(/\(CI:[^)]+\)/, '').replace(/CI:[^)]+/, '') }) || u.id,
         sublabel: u.agencia?.nombre || undefined,
       }),
     });
@@ -912,7 +913,7 @@ export class AgenciasService {
       contar: (where) => this.prisma.user.count({ where }),
       mapear: (u) => ({
         value: u.id,
-        label: `${u.name || ''} ${u.lastname || ''}`.trim() || (this.veContacto(user) ? u.email : u.id),
+        label: apellidosNombres(u) || (this.veContacto(user) ? u.email : u.id),
         sublabel: [u.role?.namerol, this.veContacto(user) ? u.email : undefined].filter(Boolean).join(' · ') || undefined,
       }),
     });
@@ -976,12 +977,12 @@ export class AgenciasService {
     return {
       ...agencia,
       usuarios: this.veContacto(user) ? agencia.usuarios : agencia.usuarios.map(({ email: _correo, ...resto }) => resto),
-      responsable: ger ? `${ger.name} ${ger.lastname}`.trim() : 'Sin Asignar',
+      responsable: ger ? apellidosNombres(ger) : 'Sin Asignar',
       gerenteId: ger?.id || null,
-      gerenteNombre: ger ? `${ger.name} ${ger.lastname}`.trim() : null,
-      liderOperador: lider ? `${lider.name} ${lider.lastname}`.trim() : 'Sin Asignar',
+      gerenteNombre: ger ? apellidosNombres(ger) : null,
+      liderOperador: lider ? apellidosNombres(lider) : 'Sin Asignar',
       liderOperadorId: lider?.id || null,
-      liderOperadorNombre: lider ? `${lider.name} ${lider.lastname}`.trim() : null,
+      liderOperadorNombre: lider ? apellidosNombres(lider) : null,
     };
   }
 
@@ -1146,7 +1147,7 @@ export class AgenciasService {
       const emisor = emisorId || (await this.resolverUsuarioSistemaId());
       if (!emisor) return;
 
-      const nombrePulidor = `${pulidor.name} ${pulidor.lastname || ''}`.trim();
+      const nombrePulidor = apellidosNombres(pulidor);
       const contexto = pulidor.agenciaId
         ? `Pulidor fijo ${nombrePulidor} (${pulidor.agencia?.nombre || 'sede'})`
         : `Pulidor móvil ${nombrePulidor} (Región ${pulidor.region?.nombre || 'N/D'})`;
@@ -1369,12 +1370,12 @@ export class AgenciasService {
 
     return {
       ...finalCreated,
-      responsable: ger ? `${ger.name} ${ger.lastname}`.trim() : 'Sin Asignar',
+      responsable: ger ? apellidosNombres(ger) : 'Sin Asignar',
       gerenteId: ger?.id || null,
-      gerenteNombre: ger ? `${ger.name} ${ger.lastname}`.trim() : null,
-      liderOperador: lider ? `${lider.name} ${lider.lastname}`.trim() : 'Sin Asignar',
+      gerenteNombre: ger ? apellidosNombres(ger) : null,
+      liderOperador: lider ? apellidosNombres(lider) : 'Sin Asignar',
       liderOperadorId: lider?.id || null,
-      liderOperadorNombre: lider ? `${lider.name} ${lider.lastname}`.trim() : null,
+      liderOperadorNombre: lider ? apellidosNombres(lider) : null,
     };
   }
 
@@ -1546,8 +1547,11 @@ export class AgenciasService {
       }
     }
 
-    if (dto.numeroBahias && dto.numeroBahias > 0) {
-      for (let i = 1; i <= dto.numeroBahias; i++) {
+    if (dto.numeroBahias !== undefined && dto.numeroBahias >= 0) {
+      const cantidad = dto.numeroBahias;
+      // Si la cantidad cambió, las bahías dentro del nuevo total se reactivan; si no, se respeta lo que se haya activado o desactivado a mano.
+      const cambioCantidad = cantidad !== agencia.numeroBahias;
+      for (let i = 1; i <= cantidad; i++) {
         const numStr = String(i).padStart(2, '0');
         const codigoBahia = `${updated.codigo}-B${numStr}`;
         await this.prisma.bahia.upsert({
@@ -1558,8 +1562,22 @@ export class AgenciasService {
             agenciaId: updated.id,
             activa: true,
           },
-          update: {},
+          update: cambioCantidad ? { activa: true } : {},
         });
+      }
+      // Las bahías que sobran (número mayor a la cantidad) quedan inactivas: no se borran porque pueden tener historial.
+      const existentes = await this.prisma.bahia.findMany({
+        where: { agenciaId: updated.id, activa: true },
+        select: { id: true, codigo: true },
+      });
+      const sobrantes = existentes
+        .filter((b) => {
+          const m = /-B(\d+)$/.exec(b.codigo);
+          return m !== null && Number(m[1]) > cantidad;
+        })
+        .map((b) => b.id);
+      if (sobrantes.length > 0) {
+        await this.prisma.bahia.updateMany({ where: { id: { in: sobrantes } }, data: { activa: false } });
       }
     }
 
@@ -1601,12 +1619,12 @@ export class AgenciasService {
 
     return {
       ...finalAgencia,
-      responsable: ger ? `${ger.name} ${ger.lastname}`.trim() : 'Sin Asignar',
+      responsable: ger ? apellidosNombres(ger) : 'Sin Asignar',
       gerenteId: ger?.id || null,
-      gerenteNombre: ger ? `${ger.name} ${ger.lastname}`.trim() : null,
-      liderOperador: lider ? `${lider.name} ${lider.lastname}`.trim() : 'Sin Asignar',
+      gerenteNombre: ger ? apellidosNombres(ger) : null,
+      liderOperador: lider ? apellidosNombres(lider) : 'Sin Asignar',
       liderOperadorId: lider?.id || null,
-      liderOperadorNombre: lider ? `${lider.name} ${lider.lastname}`.trim() : null,
+      liderOperadorNombre: lider ? apellidosNombres(lider) : null,
     };
   }
 
@@ -1954,7 +1972,7 @@ export class AgenciasService {
     const ids = [origenId, destinoId].filter(Boolean) as string[];
     const agencias = ids.length ? await this.prisma.agencia.findMany({ where: { id: { in: ids } }, select: { id: true, nombre: true } }) : [];
     const nombre = (id: string | null) => (id ? agencias.find((a) => a.id === id)?.nombre ?? null : null);
-    const realizadoPor = p.actor ? (String(p.actor.nombre || '').trim() || `${p.actor.name ?? ''} ${p.actor.lastname ?? ''}`.trim() || null) : null;
+    const realizadoPor = p.actor ? (String(p.actor.nombre || '').trim() || apellidosNombres(p.actor) || null) : null;
     await this.prisma.historialCambioAgencia.create({
       data: {
         usuarioId: p.usuario.id,
@@ -2350,7 +2368,7 @@ export class AgenciasService {
     );
 
     return {
-      message: `Usuario ${updatedUser.name} ${updatedUser.lastname} asignado correctamente`,
+      message: `Usuario ${apellidosNombres(updatedUser)} asignado correctamente`,
       user: updatedUser,
     };
   }
@@ -2380,7 +2398,7 @@ export class AgenciasService {
     );
 
     return {
-      message: `Usuario ${updatedUser.name} ${updatedUser.lastname} ${nuevoEstado === 1 ? 'activado' : 'desactivado'} correctamente`,
+      message: `Usuario ${apellidosNombres(updatedUser)} ${nuevoEstado === 1 ? 'activado' : 'desactivado'} correctamente`,
       user: {
         id: updatedUser.id,
         name: updatedUser.name,
@@ -2392,6 +2410,12 @@ export class AgenciasService {
         region: updatedUser.region,
       },
     };
+  }
+
+  /** La cédula es única: no se puede repetir en otro usuario. */
+  private async asegurarCedulaLibre(cedula: string, exceptoUserId?: string) {
+    const otro = await this.prisma.user.findFirst({ where: { cedula, ...(exceptoUserId ? { id: { not: exceptoUserId } } : {}) }, select: { id: true } });
+    if (otro) throw new ConflictException(`Ya existe un usuario con la cédula "${cedula}"`);
   }
 
   async updateUsuario(dto: UpdateUsuarioDto, actor?: any) {
@@ -2659,12 +2683,21 @@ export class AgenciasService {
       telefonoActualizado = normalizarCelularEc(dto.telefono) || null;
     }
 
+    // Cédula (única) y ciudad: vacío las quita.
+    let cedulaActualizada: string | null | undefined;
+    if (dto.cedula !== undefined) {
+      cedulaActualizada = dto.cedula.trim() || null;
+      if (cedulaActualizada) await this.asegurarCedulaLibre(cedulaActualizada, user.id);
+    }
+
     const updatedUser = await this.prisma.user.update({
       where: { id: dto.id },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.lastname !== undefined && { lastname: dto.lastname }),
         ...(telefonoActualizado !== undefined && { telefono: telefonoActualizado }),
+        ...(cedulaActualizada !== undefined && { cedula: cedulaActualizada }),
+        ...(dto.ciudad !== undefined && { ciudad: dto.ciudad.trim() || null }),
         ...(dto.email !== undefined && { email: dto.email.toLowerCase().trim() }),
         ...(dto.estado !== undefined && { estado: dto.estado }),
         ...(roleIdToSet !== undefined && { roleId: roleIdToSet }),
@@ -2725,7 +2758,7 @@ export class AgenciasService {
     }
 
     return {
-      message: `Usuario ${updatedUser.name} ${updatedUser.lastname} actualizado correctamente`,
+      message: `Usuario ${apellidosNombres(updatedUser)} actualizado correctamente`,
       user: {
         id: updatedUser.id,
         name: updatedUser.name,
@@ -2855,7 +2888,7 @@ export class AgenciasService {
       fnRolCreate.has(FUNCION.BACKUP);
     if (actor && !this.esAdmin(actor) && !supervisorPuedeCrearBackup) {
       throw new ForbiddenException(
-        'Solo Admin, Super Admin o un Supervisor regional pueden crear usuarios Backup de su región.',
+        'Solo Admin, Super Admin o un Coordinador regional pueden crear usuarios Backup de su región.',
       );
     }
     if (
@@ -2970,12 +3003,16 @@ export class AgenciasService {
 
     // Celular de 10 dígitos; opcional para todos los roles.
     const telefonoNuevo = normalizarCelularEc(dto.telefono);
+    const cedulaNueva = dto.cedula?.trim() || null;
+    if (cedulaNueva) await this.asegurarCedulaLibre(cedulaNueva);
 
     const newUser = await this.prisma.user.create({
       data: {
         name: dto.name,
         lastname: dto.lastname || '',
         telefono: telefonoNuevo || null,
+        cedula: cedulaNueva,
+        ciudad: dto.ciudad?.trim() || null,
         email: emailNorm,
         passwordHash,
         roleId: roleIdToSet,
@@ -3013,7 +3050,7 @@ export class AgenciasService {
     }
 
     return {
-      message: `Usuario ${newUser.name} ${newUser.lastname} creado correctamente`,
+      message: `Usuario ${apellidosNombres(newUser)} creado correctamente`,
       user: {
         id: newUser.id,
         name: newUser.name,
@@ -3070,6 +3107,8 @@ export class AgenciasService {
       select: {
         id: true,
         email: true,
+        cedula: true,
+        ciudad: true,
         name: true,
         lastname: true,
         estado: true,
@@ -3177,7 +3216,7 @@ export class AgenciasService {
     const cedulaMatch = rawLastname.match(/CI:\s*([A-Za-z0-9]+)/) || (u.email || '').match(/op\.([A-Za-z0-9]+)@/);
     const cedula = cedulaMatch ? cedulaMatch[1] : (u.email ? u.email.split('@')[0].replace('op.', '') : 'N/A');
     const cleanLastname = rawLastname.replace(/\(CI:[^)]+\)/, '').replace(/CI:[^)]+/, '').trim();
-    const fullName = `${u.name || ''} ${cleanLastname}`.trim();
+    const fullName = `${cleanLastname} ${u.name || ''}`.trim();
     // Antes se leía `u.bahiasAsignadas` (la relación legacy 1:1 vía Bahia.operadorActualId): en
     // cuanto una bahía admite más de un lavador (maxLavadoresPorBahia > 1) y se asigna un segundo,
     // `asignarOperadorABahia` mueve ese campo legacy al recién llegado y el primer lavador deja de
@@ -3190,7 +3229,8 @@ export class AgenciasService {
     return {
       id: u.id,
       nombre: fullName || u.name,
-      cedula: cedula,
+      cedula: u.cedula || cedula,
+      ciudad: u.ciudad ?? '',
       telefono: u.telefono ?? '',
       rol: u.role?.namerol || 'LAVADOR',
       sucursal: u.agencia?.nombre || 'Sin Agencia',
@@ -3275,7 +3315,7 @@ export class AgenciasService {
     const where = this.whereOperadores(dto, currentUser);
     return this.ocultarContacto(await listarPaginable(dto, {
       where: combinarWhere(where, whereBusqueda(['name', 'lastname', 'email', 'agencia.nombre'], dto.search)),
-      columnas: columnasSimples({ nombre: 'name', agencia: 'agencia.nombre', rol: 'role.namerol', estado: 'estado', fecha: 'createdAt' }),
+      columnas: columnasSimples({ nombre: 'lastname', agencia: 'agencia.nombre', rol: 'role.namerol', estado: 'estado', fecha: 'createdAt' }),
       ordenHeredado: [{ name: 'asc' }],
       contar: (w) => this.prisma.user.count({ where: w }),
       mapear: (users: any[]) => users.map((u) => this.mapUserToOperador(u)),
@@ -3547,7 +3587,7 @@ export class AgenciasService {
 
 /** Columnas por las que se puede ordenar la lista de usuarios (clave pública → campo de Prisma). */
 const ORDEN_USUARIOS = columnasSimples({
-  nombre: 'name',
+  nombre: 'lastname',
   email: 'email',
   rol: 'role.namerol',
   agencia: 'agencia.nombre',
@@ -3562,6 +3602,8 @@ const SELECT_USUARIO_LISTA = {
   id: true,
   email: true,
   telefono: true,
+  cedula: true,
+  ciudad: true,
   name: true,
   lastname: true,
   estado: true,

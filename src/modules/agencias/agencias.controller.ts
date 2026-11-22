@@ -422,7 +422,7 @@ export class AgenciasController {
   @Permiso('usuarios.usuarios.editar', 'usuarios.usuarios.backup')
   @Post('usuarios/update')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Actualizar datos de usuario; Supervisor regional solo puede modificar Backups de su región' })
+  @ApiOperation({ summary: 'Actualizar datos de usuario; Coordinador regional solo puede modificar Backups de su región' })
   async updateUsuario(@Body() dto: UpdateUsuarioDto, @CurrentUser() user: any) {
     return this.agenciasService.updateUsuario(dto, user);
   }
@@ -430,7 +430,7 @@ export class AgenciasController {
   @Permiso('usuarios.usuarios.crear', 'usuarios.usuarios.backup')
   @Post('usuarios/create')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear usuarios; Supervisor regional solo puede crear Backups de su región' })
+  @ApiOperation({ summary: 'Crear usuarios; Coordinador regional solo puede crear Backups de su región' })
   async createUsuario(@Body() dto: CreateUsuarioDto, @CurrentUser() user: any) {
     return this.agenciasService.createUsuario(dto, user);
   }
