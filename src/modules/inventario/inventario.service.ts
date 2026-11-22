@@ -253,6 +253,7 @@ import { randomUUID } from 'crypto';
 import { resolverAlcance } from '../../common/permisos/alcance.js';
 import { tienePermiso } from '../../common/permisos/capacidades.js';
 import { normalizarRol } from '../../common/permisos/alias-roles.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 @Injectable()
 export class InventarioService {
   private readonly logger = new Logger(InventarioService.name);
@@ -1127,7 +1128,7 @@ export class InventarioService {
     const ubicacionId = String(bodegaId || agenciaId || pulidorId);
     const ubicacionNombre = bodega?.nombre
       || agencia?.nombre
-      || `${pulidor?.name || ''} ${pulidor?.lastname || ''}`.trim()
+      || apellidosNombres(pulidor)
       || pulidor?.email
       || 'Ubicación';
 
@@ -1164,7 +1165,7 @@ export class InventarioService {
     if (!unidadId) {
       throw new BadRequestException('El insumo no tiene unidad de medida configurada.');
     }
-    const responsableNombre = `${usuario?.name || ''} ${usuario?.lastname || ''}`.trim() || usuario?.email || usuarioId;
+    const responsableNombre = apellidosNombres(usuario) || usuario?.email || usuarioId;
     const observaciones = `[REAJUSTE] ${motivoCorto}. ${motivoTexto} | ${responsableNombre}`;
     const numeroComprobante = `AJU-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 100)}`;
 
@@ -1259,7 +1260,7 @@ export class InventarioService {
       bodega: bodega ? { id: bodega.id, nombre: bodega.nombre } : null,
       agencia: agencia ? { id: agencia.id, nombre: agencia.nombre } : null,
       pulidor: pulidor
-        ? { id: pulidor.id, nombre: `${pulidor.name || ''} ${pulidor.lastname || ''}`.trim() || pulidor.email }
+        ? { id: pulidor.id, nombre: apellidosNombres(pulidor) || pulidor.email }
         : null,
       ubicacion: { id: ubicacionId, nombre: ubicacionNombre, tipo: tipoUbicacion },
       motivo: motivoCorto,
@@ -2296,7 +2297,7 @@ export class InventarioService {
 
       return {
         id: pul.id,
-        nombre: `${pul.name || ''} ${pul.lastname || ''}`.trim() || pul.email,
+        nombre: apellidosNombres(pul) || pul.email,
         email: pul.email,
         telefono: null,
         rol: pul.role?.namerol || 'PULIDOR',
@@ -3033,7 +3034,7 @@ export class InventarioService {
           throw new ForbiddenException('Solo puedes despachar a pulidores de tu región.');
         }
       }
-      destinoLabel = `${pulidor.name} ${pulidor.lastname} (Pulidor)`;
+      destinoLabel = `${apellidosNombres(pulidor)} (Pulidor)`;
     } else if (tipo === 'DESPACHO_BODEGA' || rawDestinoBodega) {
       if (isLider) {
         throw new ForbiddenException(
@@ -3604,7 +3605,7 @@ export class InventarioService {
               f."resolucion", f."observacionResolucion", f."resueltoEn", f."createdAt",
               i."nombre" AS "insumoNombre", i."codigoSKU" AS "insumoSku",
               COALESCE(b."nombre", ag."nombre") AS "origenNombre",
-              TRIM(CONCAT(u."name", ' ', u."lastname")) AS "resueltoPorNombre"
+              TRIM(CONCAT(u."lastname", ' ', u."name")) AS "resueltoPorNombre"
        FROM "FaltanteDespacho" f
        JOIN "Insumo" i ON i."id" = f."insumoId"
        LEFT JOIN "bodegas" b ON b."id" = f."origenBodegaId"
@@ -3735,7 +3736,7 @@ export class InventarioService {
     const [faltantes, evidencias] = await Promise.all([
       this.prisma.$queryRawUnsafe<any[]>(
         `SELECT f."id", f."movimientoId", f."insumoId", f."cantidadUnd", f."estado", f."resolucion", f."observacionResolucion",
-                f."motivoRecepcion", f."resueltoEn", TRIM(CONCAT(u."name", ' ', u."lastname")) AS "resueltoPorNombre"
+                f."motivoRecepcion", f."resueltoEn", TRIM(CONCAT(u."lastname", ' ', u."name")) AS "resueltoPorNombre"
          FROM "FaltanteDespacho" f LEFT JOIN "User" u ON u."id" = f."resueltoPorId"
          WHERE f."movimientoId" = ANY($1::text[]) ORDER BY f."createdAt"`,
         ids,
@@ -4649,8 +4650,8 @@ export class InventarioService {
         pulidorId: pulidor.id,
         tipoUbicacion: pulidor.agenciaId ? 'PULIDOR_FIJO' : 'PULIDOR_MOVIL',
         etiqueta: pulidor.agenciaId
-          ? `Pulidor fijo ${pulidor.name} ${pulidor.lastname} (${pulidor.agencia?.nombre || 'sede'})`
-          : `Pulidor móvil ${pulidor.name} ${pulidor.lastname} (${pulidor.region?.nombre || 'sin región'})`,
+          ? `Pulidor fijo ${apellidosNombres(pulidor)} (${pulidor.agencia?.nombre || 'sede'})`
+          : `Pulidor móvil ${apellidosNombres(pulidor)} (${pulidor.region?.nombre || 'sin región'})`,
       });
     }
   }
@@ -6599,7 +6600,7 @@ export class InventarioService {
     return this.paginarInsumosServicios({
       pulidor: {
         id: pulidor.id,
-        nombre: `${pulidor.name} ${pulidor.lastname}`.trim(),
+        nombre: apellidosNombres(pulidor),
         modalidad: tipoUb === 'PULIDOR_FIJO' ? 'FIJO' : 'MOVIL',
         region: pulidor.region?.nombre,
         agencia: pulidor.agencia?.nombre,

@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CacheService } from '../../common/cache/cache.service.js';
 import { modulosDeRol } from '../../common/permisos/modulos-navegacion.js';
 import { JWT_VERIFY_OPTIONS } from './jwt.config.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 export interface JwtPayload {
   sub: string;
@@ -92,7 +93,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: user.email,
       name: user.name,
       lastname: user.lastname,
-      nombre: `${user.name} ${user.lastname}`.trim(),
+      nombre: apellidosNombres(user),
       roleId: user.roleId,
       role: user.role,
       permisos: modulosDeRol(user.role),

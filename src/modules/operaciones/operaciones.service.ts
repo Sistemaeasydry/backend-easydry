@@ -33,6 +33,7 @@ import { ConsumosArchivo } from './consumos-archivo.js';
 import { DecisionesService } from '../../common/permisos/decisiones.service.js';
 import { Alcance, puedeSobreAgencia, resolverAlcance } from '../../common/permisos/alcance.js';
 import { aUnidadDelInsumo, valorarConsumo } from '../../common/utils/costo-insumo.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** Datos del vehículo y del cliente que corrige «Editar OT» (valen para todos los servicios de la misma OT). */
 const CAMPOS_EDITABLES_OT = ['placa', 'marca', 'modelo', 'color', 'cliente'] as const;
@@ -73,7 +74,7 @@ export class OperacionesService {
 
   /** Nombre visible de quien decide, tomado de la sesión. */
   private nombreDe(user: any): string {
-    return [user?.name, user?.lastname].filter(Boolean).join(' ').trim() || user?.email || 'Usuario';
+    return apellidosNombres(user) || user?.email || 'Usuario';
   }
 
   /** El servicio debe estar dentro del alcance del usuario (agencia, región o lo propio). */
@@ -1872,7 +1873,7 @@ export class OperacionesService {
     };
     const operadorSelect = { select: { name: true, lastname: true } };
     const nombreOperador = (u?: { name?: string | null; lastname?: string | null } | null) =>
-      u ? `${u.name || ''} ${u.lastname || ''}`.replace(/\(CI:[^)]*\)/, '').trim() : '';
+      u ? apellidosNombres(u).replace(/\(CI:[^)]*\)/, '').trim() : '';
 
     const whereGeneral: any = { ...rango };
     if (agenciaFiltro()) whereGeneral.agenciaId = agenciaFiltro();

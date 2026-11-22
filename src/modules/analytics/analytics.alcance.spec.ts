@@ -38,7 +38,7 @@ describe('AnalyticsService (base real)', () => {
   let y1: any;
   let gen: any, esp: any;
   const act: Record<string, any> = {};
-  const nombreCompleto = (u: any) => `${u.name} ${u.lastname}`;
+  const nombreCompleto = (u: any) => `${u.lastname} ${u.name}`;
 
   beforeAll(async () => {
     env = await abrirEntorno();

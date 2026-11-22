@@ -18,6 +18,7 @@ import { ServiciosFederados } from '../archivado/servicios-federados.js';
 import { HistoricoService } from '../archivado/historico.service.js';
 import { CALIFICACIONES_INFORME, estrellasDe5s, estrellasDeInforme, promedioEstrellas } from './auditorias-estrellas.js';
 import { costoDeConsumo, costoPorUnidadBase } from '../../common/utils/costo-insumo.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** % máximo de descuento permitido sin autorización: por encima se considera "fuera de rango". */
 const UMBRAL_DESCUENTO_PCT = 15;
@@ -354,7 +355,7 @@ export class AnalyticsService {
 
     const regionDe = (ag?: any) => ag?.regionRel?.nombre || ag?.region || 'Sin región';
     const operadorDe = (s: typeof servicios[number]) =>
-      [s.operador?.name, s.operador?.lastname].filter(Boolean).join(' ').trim() || 'Sin pulidor';
+      apellidosNombres(s.operador) || 'Sin pulidor';
     const claveDe = (s: typeof servicios[number]): string => {
       const ag = s.bahia?.agencia;
       if (esAlcanceAgencia) {
@@ -889,7 +890,7 @@ this.federados.count('servicioLavado', {
           agenciasCount[s.agencia.nombre] = (agenciasCount[s.agencia.nombre] || 0) + 1;
         }
         if (s.solicitante) {
-          const nombreCompleto = `${s.solicitante.name} ${s.solicitante.lastname}`.trim();
+          const nombreCompleto = apellidosNombres(s.solicitante);
           solicitantesCount[nombreCompleto] = (solicitantesCount[nombreCompleto] || 0) + 1;
         }
       }
@@ -1233,7 +1234,7 @@ this.federados.count('servicioLavado', {
         bahiasIncidentes[bKey] = { nombre: bKey, total: (bahiasIncidentes[bKey]?.total || 0) + 1 };
       }
       if (inc.reportadoPor) {
-        const pKey = `${inc.reportadoPor.name} ${inc.reportadoPor.lastname}`.trim() || 'Desconocido';
+        const pKey = apellidosNombres(inc.reportadoPor) || 'Desconocido';
         pulidoresIncidentes[pKey] = { nombre: pKey, total: (pulidoresIncidentes[pKey]?.total || 0) + 1 };
       }
     }
@@ -1285,7 +1286,7 @@ this.federados.count('servicioLavado', {
       incidentesPorGravedad,
       // Alertas operativas unificadas: stock + mantenimiento (incidentes abiertos y preventivos vencidos).
       alertasOperativas: this.armarAlertasOperativas(alertasPendientes, incidentesActivosList, mantenimientosVencidos),
-      alertasRecientes: alertasPendientes.map(a => ({ id: a.id, mensaje: a.mensaje, nivel: a.nivel, createdAt: a.createdAt, agencia: a.agencia?.nombre, pulidor: a.pulidor ? `${a.pulidor.name} ${a.pulidor.lastname}` : null })),
+      alertasRecientes: alertasPendientes.map(a => ({ id: a.id, mensaje: a.mensaje, nivel: a.nivel, createdAt: a.createdAt, agencia: a.agencia?.nombre, pulidor: a.pulidor ? apellidosNombres(a.pulidor) : null })),
       distribucionEstados: estadosCount,
       maquinariasPorEstado: maquinariasStats.reduce((acc, curr) => { acc[curr.estadoOperativo] = curr._count.id; return acc; }, {} as Record<string, number>),
     };
@@ -1303,9 +1304,9 @@ this.federados.count('servicioLavado', {
         severidad: (a.nivel === 'CRITICO' || a.nivel === 'AGOTADO') ? 'critica' : (a.nivel === 'BAJO' ? 'advertencia' : 'info'),
         titulo: `Stock ${a.nivel}`,
         detalle: a.insumo?.nombre || 'Insumo',
-        origen: a.agencia?.nombre || (a.pulidor ? `${a.pulidor.name} ${a.pulidor.lastname}` : null),
+        origen: a.agencia?.nombre || (a.pulidor ? apellidosNombres(a.pulidor) : null),
         agencia: a.agencia?.nombre ?? null,
-        pulidor: a.pulidor ? `${a.pulidor.name} ${a.pulidor.lastname}` : null,
+        pulidor: a.pulidor ? apellidosNombres(a.pulidor) : null,
         region: a.agencia?.region || null,
         nivel: a.nivel as string,
         estado: a.estado as string,
@@ -1319,7 +1320,7 @@ this.federados.count('servicioLavado', {
         detalle: i.titulo,
         origen: i.maquinaria ? `${i.maquinaria.codigo} · ${i.maquinaria.nombre}` : null,
         agencia: i.maquinaria?.agencia?.nombre ?? null,
-        pulidor: i.reportadoPor ? `${i.reportadoPor.name} ${i.reportadoPor.lastname}` : null,
+        pulidor: i.reportadoPor ? apellidosNombres(i.reportadoPor) : null,
         region: i.maquinaria?.agencia?.region || null,
         nivel: 'INCIDENTE',
         estado: 'ABIERTO',
@@ -1490,7 +1491,7 @@ this.federados.count('servicioLavado', {
     for (const s of servicios) {
       if (!s.operadorId) continue;
       if (!acumulado[s.operadorId]) {
-        const nombreOperador = s.operador ? `${s.operador.name} ${s.operador.lastname}` : 'Operador';
+        const nombreOperador = s.operador ? apellidosNombres(s.operador) : 'Operador';
         const nombreAgencia = s.operador?.agencia?.nombre || s.bahia?.agencia?.nombre || 'General';
         const nombreBahia = s.bahia?.nombre || 'Sin Bahía';
         acumulado[s.operadorId] = { 
@@ -1552,7 +1553,7 @@ this.federados.count('servicioLavado', {
       if (!s.operadorId || !op) return;
       const f = funcionesDeRol(op.role?.capacidades, op.role?.namerol);
       const rol = f.has(FUNCION.PULIDOR) || esEspecial ? 'PULIDOR' : f.has(FUNCION.AUXILIAR) ? 'AUXILIAR' : f.has(FUNCION.LIDER_AGENCIA) ? 'LIDER' : 'LAVADOR';
-      const p = personas.get(s.operadorId) ?? { personaId: s.operadorId, nombre: `${op.name} ${op.lastname}`.trim(), rol, agenciaId: ag?.id ?? op.agencia?.id ?? null, agencia: ag?.nombre ?? op.agencia?.nombre ?? 'Móvil (sin agencia)', regionId: reg?.id ?? op.region?.id ?? null, region: reg?.nombre ?? op.region?.nombre ?? '', servicios: 0, monto: 0, minutos: 0, conTiempo: 0 };
+      const p = personas.get(s.operadorId) ?? { personaId: s.operadorId, nombre: apellidosNombres(op), rol, agenciaId: ag?.id ?? op.agencia?.id ?? null, agencia: ag?.nombre ?? op.agencia?.nombre ?? 'Móvil (sin agencia)', regionId: reg?.id ?? op.region?.id ?? null, region: reg?.nombre ?? op.region?.nombre ?? '', servicios: 0, monto: 0, minutos: 0, conTiempo: 0 };
       p.servicios++; p.monto += monto;
       if (minutos !== null) { p.minutos += minutos; p.conTiempo++; }
       personas.set(s.operadorId, p);
@@ -1599,7 +1600,7 @@ this.federados.count('servicioLavado', {
     for (const s of servicios) {
       if (!s.operadorId || !s.operador || !funcionesDeRol(s.operador.role.capacidades, s.operador.role.namerol).has(FUNCION.PULIDOR)) continue;
       if (!acumulado[s.operadorId]) {
-        const nombreBase = `${s.operador.name} ${s.operador.lastname}`;
+        const nombreBase = apellidosNombres(s.operador);
         const esFijo = s.operador.agenciaId !== null;
         const ubicacion = esFijo ? (s.operador.agencia?.nombre || 'Agencia') : (s.operador.region?.nombre || 'Nacional');
         acumulado[s.operadorId] = { 
@@ -1943,7 +1944,7 @@ this.federados.count('servicioLavado', {
       let ag = 'Ubicación Desconocida';
       if ((a as any).pulidor) {
         const isFijo = !!(a as any).pulidor.agenciaId;
-        ag = `Kit ${isFijo ? 'Fijo' : 'Móvil'}: ${(a as any).pulidor.name} ${(a as any).pulidor.lastname}`.trim();
+        ag = `Kit ${isFijo ? 'Fijo' : 'Móvil'}: ${apellidosNombres((a as any).pulidor)}`.trim();
       } else if (a.agencia?.nombre) {
         ag = a.agencia.nombre;
       }
@@ -2104,7 +2105,7 @@ this.federados.count('servicioLavado', {
       else if (s.tipoUbicacion === 'AGENCIA' && s.agencia?.nombre) ubic = s.agencia.nombre;
       else if (s.pulidor) {
         const tipoKit = s.tipoUbicacion === 'PULIDOR_FIJO' ? 'Kit Fijo' : 'Kit Móvil';
-        ubic = `${tipoKit}: ${s.pulidor.name} ${s.pulidor.lastname}`.trim();
+        ubic = `${tipoKit}: ${apellidosNombres(s.pulidor)}`.trim();
       }
       (porUbicacion[ubic] ??= vacio())[estado]++;
       const costoBase = this.costoUnidadBase(ins);
@@ -2332,7 +2333,7 @@ this.federados.count('servicioLavado', {
       if (s.tiempoEfectivoSeg) { tiempoEfectivoTotal += s.tiempoEfectivoSeg; serviciosConTiempo++; }
       if (s.estado === 'Completado') ingresoTotal30d += Number(s.precio || 0);
       if (s.operador) {
-        const k = `${s.operador.name} ${s.operador.lastname}`;
+        const k = apellidosNombres(s.operador);
         operadoresCount[k] = (operadoresCount[k] || 0) + 1;
         // Fijo = pulidor con agencia asignada; móvil = sin agencia (opera en su región).
         const bucket = s.operador.agenciaId ? pulidoresFijos : pulidoresMoviles;

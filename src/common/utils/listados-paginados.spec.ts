@@ -223,9 +223,9 @@ describe('listados paginados (base real)', () => {
   describe('particularidades', () => {
     it('regiones: conserva el responsable (supervisor) en cada fila, con o sin página', async () => {
       const heredado: any = await agencias.listRegiones({ search: env.marca } as any);
-      expect(heredado.find((r: any) => r.id === ids.regiones[0])).toMatchObject({ responsable: 'Ana Paz' });
+      expect(heredado.find((r: any) => r.id === ids.regiones[0])).toMatchObject({ responsable: 'Paz Ana' });
       const pagina: any = await agencias.listRegiones({ page: 1, search: env.marca } as any);
-      expect(pagina.items.find((r: any) => r.id === ids.regiones[0])).toMatchObject({ responsable: 'Ana Paz' });
+      expect(pagina.items.find((r: any) => r.id === ids.regiones[0])).toMatchObject({ responsable: 'Paz Ana' });
     });
 
     it('regiones: conserva el filtro de estado', async () => {

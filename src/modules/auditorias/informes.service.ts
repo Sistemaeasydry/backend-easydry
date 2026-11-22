@@ -49,6 +49,7 @@ import {
   puedePasarA,
   type EstadoInforme,
 } from './informes.reglas.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -224,7 +225,7 @@ export class InformesInspeccionService {
       agenciaId: i.agenciaId,
       agenciaNombre: i.agencia?.nombre ?? '',
       inspectorId: i.inspectorId,
-      inspectorNombre: `${i.inspector?.name ?? ''} ${i.inspector?.lastname ?? ''}`.trim(),
+      inspectorNombre: apellidosNombres(i.inspector),
       destinatarioNombre: i.destinatarioNombre,
       fecha: dia(i.fecha),
       fechaVisita: i.fechaVisita?.toISOString() ?? null,
@@ -380,7 +381,7 @@ export class InformesInspeccionService {
       select: { inspector: { select: { id: true, name: true, lastname: true } } },
     });
     const responsables = informes
-      .map((i) => ({ id: i.inspector.id, nombre: `${i.inspector.name} ${i.inspector.lastname}`.trim() }))
+      .map((i) => ({ id: i.inspector.id, nombre: apellidosNombres(i.inspector) }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
     return { agencias, responsables };
   }
@@ -398,7 +399,7 @@ export class InformesInspeccionService {
     // Un líder o un pulidor fijo tienen agencia: al elegirlos, el formulario marca su agencia. El pulidor móvil no tiene (opera en su región).
     return usuarios.map((u) => ({
       id: u.id,
-      nombre: `${u.name} ${u.lastname}`.trim(),
+      nombre: apellidosNombres(u),
       cargo: funcionesDeRol(u.role.capacidades, u.role.namerol).has(FUNCION.PULIDOR) ? (u.agenciaId ? 'Pulidor fijo' : 'Pulidor móvil') : cargoDeRol(u.role.namerol),
       rol: u.role.namerol,
       agenciaId: u.agenciaId,
@@ -451,7 +452,7 @@ export class InformesInspeccionService {
       estado: i.estado,
       agencia: i.agencia,
       inspectorId: i.inspectorId,
-      inspectorNombre: `${i.inspector?.name ?? ''} ${i.inspector?.lastname ?? ''}`.trim(),
+      inspectorNombre: apellidosNombres(i.inspector),
       destinatarioId: i.destinatarioId,
       destinatarioNombre: i.destinatarioNombre,
       fecha: dia(i.fecha),
@@ -478,7 +479,7 @@ export class InformesInspeccionService {
       selloAgencia: this.selloDeAgencia(i),
       adjuntos: (i.adjuntos ?? []).map((a: any) => ({
         userId: a.userId,
-        nombre: `${a.user?.name ?? ''} ${a.user?.lastname ?? ''}`.trim(),
+        nombre: apellidosNombres(a.user),
         rol: a.user?.role?.namerol ?? '',
         agregadoPorNombre: a.agregadoPorNombre ?? '',
         agregadoEn: a.createdAt.toISOString(),
@@ -541,7 +542,7 @@ export class InformesInspeccionService {
     const fecha = hoyEcuador().toISOString().slice(0, 10);
     const periodo = periodoDe(fecha);
     const rol = rolDeUsuario(user);
-    const nombre = texto(user?.nombre) || `${user?.name ?? ''} ${user?.lastname ?? ''}`.trim();
+    const nombre = texto(user?.nombre) || apellidosNombres(user);
 
     for (let intento = 0; intento < 5; intento++) {
       try {
@@ -623,10 +624,10 @@ export class InformesInspeccionService {
       : null;
     const calificacionNueva = puedeCalificar ? dto.calificacion : undefined;
     const calificacionCambia = !!calificacionNueva && calificacionNueva !== ctx.actual?.calificacion;
-    const nombreActor = texto(user?.nombre) || `${user?.name ?? ''} ${user?.lastname ?? ''}`.trim();
+    const nombreActor = texto(user?.nombre) || apellidosNombres(user);
     return {
       destinatarioId: destinatario?.id ?? (dto.destinatarioId ? undefined : null),
-      destinatarioNombre: destinatario ? `${destinatario.name} ${destinatario.lastname}`.trim() : texto(dto.destinatarioNombre),
+      destinatarioNombre: destinatario ? apellidosNombres(destinatario) : texto(dto.destinatarioNombre),
       fecha: fechaDia(ctx.fecha)!,
       fechaVisita: dto.fechaVisita ? new Date(dto.fechaVisita) : ctx.esNuevo ? new Date() : undefined,
       tipoInspeccion: dto.tipoInspeccion ?? (ctx.esNuevo ? 'RUTINA' : undefined),
@@ -794,7 +795,7 @@ export class InformesInspeccionService {
       throw new ForbiddenException('Solo un Admin o Super Admin aprueba los informes y firma la recepción.');
     }
     if (!esImagenDataUrl(dto.imagen, MAX_FIRMA_CARACTERES)) throw new BadRequestException('La firma no es una imagen válida.');
-    const nombre = texto(user?.nombre) || `${user?.name ?? ''} ${user?.lastname ?? ''}`.trim();
+    const nombre = texto(user?.nombre) || apellidosNombres(user);
     const huella = huellaContenido(informe);
     await this.prisma.$transaction(async (tx) => {
       const datos = { nombre, cargo: 'Recepción', imagen: this.crypto.protegerEnReposo(dto.imagen), firmadoEn: new Date(), registradoPorId: String(user.id), registradoPorNombre: nombre, vigente: true, contenidoHash: huella };
@@ -868,7 +869,7 @@ export class InformesInspeccionService {
       }
     }
     const huella = huellaContenido(informe);
-    const firmante = texto(user?.nombre) || `${user?.name ?? ''} ${user?.lastname ?? ''}`.trim();
+    const firmante = texto(user?.nombre) || apellidosNombres(user);
     await this.prisma.$transaction(async (tx) => {
       const datos = { nombre, cargo: def.nombre, imagen: this.crypto.protegerEnReposo(dto.imagen), firmadoEn: new Date(), registradoPorId: String(user.id), registradoPorNombre: firmante, vigente: true, contenidoHash: huella };
       await tx.informeFirma.upsert({
@@ -973,7 +974,7 @@ export class InformesInspeccionService {
     const yaEstan = new Set((informe.adjuntos ?? []).map((a: any) => a.userId));
     const nuevos = ids.filter((id) => !yaEstan.has(id));
     if (nuevos.length) {
-      const quien = texto(user?.nombre) || `${user?.name ?? ''} ${user?.lastname ?? ''}`.trim();
+      const quien = texto(user?.nombre) || apellidosNombres(user);
       await this.prisma.$transaction(async (tx) => {
         await tx.informeAdjunto.createMany({ data: nuevos.map((userId) => ({ informeId: informe.id, userId, agregadoPorId: String(user.id), agregadoPorNombre: quien })), skipDuplicates: true });
         await this.registrar(tx, informe.id, user, 'ADJUNTOS_AGREGADOS', null, null, `Se adjuntó a ${nuevos.length} usuario(s) para que reciban el informe cuando se apruebe.`);
@@ -1025,7 +1026,7 @@ export class InformesInspeccionService {
       orderBy: [{ name: 'asc' }, { lastname: 'asc' }],
       take: 60,
     });
-    return usuarios.map((u) => ({ id: u.id, nombre: `${u.name} ${u.lastname}`.trim(), rol: cargoDeRol(u.role.namerol), agencia: u.agencia?.nombre ?? '' }));
+    return usuarios.map((u) => ({ id: u.id, nombre: apellidosNombres(u), rol: cargoDeRol(u.role.namerol), agencia: u.agencia?.nombre ?? '' }));
   }
 
   // ───────────────────────── Seguimiento de planes ─────────────────────────
@@ -1064,7 +1065,7 @@ export class InformesInspeccionService {
         estadoAnterior: anterior,
         estadoNuevo: nuevo,
         usuarioId: String(user.id),
-        usuarioNombre: texto(user?.nombre) || `${user?.name ?? ''} ${user?.lastname ?? ''}`.trim(),
+        usuarioNombre: texto(user?.nombre) || apellidosNombres(user),
         rol: rolDeUsuario(user),
         detalle: detalle ?? null,
       },

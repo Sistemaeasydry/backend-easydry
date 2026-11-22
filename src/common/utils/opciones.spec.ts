@@ -152,7 +152,7 @@ describe('opciones de agencias, regiones, clientes, bahías, operadores y usuari
     const valores = r.items.map((i: any) => i.value);
     expect(valores).toContain(ids.pedro);
     expect(valores).not.toContain(ids.otro);
-    expect(r.items.find((i: any) => i.value === ids.pedro)).toEqual({ value: ids.pedro, label: 'Pedro Ruiz', sublabel: a1.nombre });
+    expect(r.items.find((i: any) => i.value === ids.pedro)).toEqual({ value: ids.pedro, label: 'Ruiz Pedro', sublabel: a1.nombre });
   });
 
   it('usuarios: nunca ofrece SUPER_ADMIN y solo pide los campos necesarios', async () => {
@@ -162,7 +162,7 @@ describe('opciones de agencias, regiones, clientes, bahías, operadores y usuari
     expect(valores).not.toContain(ids.superadmin);
     expect(r.items.find((i: any) => i.value === ids.admin1)).toEqual({
       value: ids.admin1,
-      label: 'Ana Paz',
+      label: 'Paz Ana',
       sublabel: `ADMIN · ${env.marca}-admin1@prueba.local`,
     });
     // Aun pidiendo SUPER_ADMIN por nombre, no se ofrece.

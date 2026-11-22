@@ -186,7 +186,7 @@ describe('listados paginados de la fase 8 (base real)', () => {
       const r: any = await agencias.listAgencias({ search: env.marca } as any, actores.admin);
       expect(Array.isArray(r)).toBe(true);
       expect(nombres(r)).toEqual(['Agencia A1', 'Agencia A2', 'Agencia A3']); // orden heredado: por nombre
-      expect(r[0]).toMatchObject({ productividad: 50, gerenteNombre: 'Gina Paz', liderOperadorNombre: 'Lucas Rey' });
+      expect(r[0]).toMatchObject({ productividad: 50, gerenteNombre: 'Paz Gina', liderOperadorNombre: 'Rey Lucas' });
       expect(r[1].productividad).toBe(0);
     });
 
@@ -194,12 +194,12 @@ describe('listados paginados de la fase 8 (base real)', () => {
       const r: any = await agencias.listAgencias({ page: 1, pageSize: 2, search: env.marca, sortField: 'nombre', sortOrder: 'asc' } as any, actores.admin);
       expect(r).toMatchObject({ total: 3, page: 1, pageSize: 2, totalPages: 2 });
       expect(nombres(r.items)).toEqual(['Agencia A1', 'Agencia A2']);
-      expect(r.items[0]).toMatchObject({ gerenteNombre: 'Gina Paz', productividad: 50 });
+      expect(r.items[0]).toMatchObject({ gerenteNombre: 'Paz Gina', productividad: 50 });
     });
 
     it('incluirProductividad: false omite la productividad (para usarla como selector)', async () => {
       const r: any = await agencias.listAgencias({ search: env.marca, incluirProductividad: false } as any, actores.admin);
-      expect(r[0]).toMatchObject({ productividad: 0, gerenteNombre: 'Gina Paz' });
+      expect(r[0]).toMatchObject({ productividad: 0, gerenteNombre: 'Paz Gina' });
       const pagina: any = await agencias.listAgencias({ page: 1, search: env.marca, incluirProductividad: false } as any, actores.admin);
       expect(pagina.items.every((i: any) => i.productividad === 0)).toBe(true);
     });
@@ -236,19 +236,19 @@ describe('listados paginados de la fase 8 (base real)', () => {
     it('modo heredado: arreglo con el nombre armado', async () => {
       const r: any = await agencias.listOperadores({ agenciaId: a1.id } as any, actores.admin);
       expect(Array.isArray(r)).toBe(true);
-      expect(nombresOp(r)).toContain('Pedro Ruiz');
-      expect(r.find((o: any) => o.id === ids.pedro)).toMatchObject({ id: ids.pedro, nombre: 'Pedro Ruiz' });
+      expect(nombresOp(r)).toContain('Ruiz Pedro');
+      expect(r.find((o: any) => o.id === ids.pedro)).toMatchObject({ id: ids.pedro, nombre: 'Ruiz Pedro' });
     });
 
     it('paginado: conserva el filtro por agencia (id o nombre) junto con la búsqueda', async () => {
       const r: any = await agencias.listOperadores({ page: 1, pageSize: 10, agenciaId: a1.nombre, search: 'ped' } as any, actores.admin);
       expect(r).toMatchObject({ total: 1, page: 1, pageSize: 10, totalPages: 1 });
-      expect(r.items[0].nombre).toBe('Pedro Ruiz');
+      expect(r.items[0].nombre).toBe('Ruiz Pedro');
     });
 
     it('filtra por bahía asignada, cliente de la agencia y estado (pantalla de operadores)', async () => {
       const r: any = await agencias.listOperadores({ page: 1, bahiaNombre: b1.nombre, clienteNombre: acme.nombre, estado: 1 } as any, actores.admin);
-      expect(nombresOp(r.items)).toEqual(['Luis Soto', 'Pedro Ruiz']);
+      expect(nombresOp(r.items)).toEqual(['Ruiz Pedro', 'Soto Luis']);
     });
 
     it('la bahía de un operador sale de BahiaOperador (activo), no del campo legacy que se pisa al agregar un segundo lavador', async () => {
@@ -256,13 +256,13 @@ describe('listados paginados de la fase 8 (base real)', () => {
       // pasa al recién llegado. Si se leyera ese campo, el PRIMER lavador aparecería como "Sin asignar" aunque su fila
       // en BahiaOperador siga activa. Aquí Pedro llegó primero y el campo legacy apunta a Luis.
       const r: any = await agencias.listOperadores({ page: 1, agenciaId: a1.id, search: 'ruiz' } as any, actores.admin);
-      expect(r.items[0]).toMatchObject({ nombre: 'Pedro Ruiz', bahiaId: b1.id, bahia: b1.nombre });
+      expect(r.items[0]).toMatchObject({ nombre: 'Ruiz Pedro', bahiaId: b1.id, bahia: b1.nombre });
     });
 
     it('un líder queda limitado a su agencia aunque pida otra', async () => {
       const r: any = await agencias.listOperadores({ page: 1, agenciaId: a2.id } as any, actores.lucas);
       expect(r.items.map((o: any) => o.nombre)).not.toContain('Ana Lopez');
-      expect(r.items.map((o: any) => o.nombre)).toContain('Pedro Ruiz'); // ve a los de su agencia
+      expect(r.items.map((o: any) => o.nombre)).toContain('Ruiz Pedro'); // ve a los de su agencia
     });
 
     it('el DTO no fija page/pageSize', () => {

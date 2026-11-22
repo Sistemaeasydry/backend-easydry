@@ -48,6 +48,7 @@ import {
   type Formato5s,
   type FormatoId,
 } from './auditoria5s.reglas.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -55,7 +56,7 @@ const dia = (d: Date | null | undefined): string | null => (d ? d.toISOString().
 const fechaDia = (s?: string | null): Date | null => (s ? new Date(`${String(s).slice(0, 10)}T00:00:00.000Z`) : null);
 const texto = (s: string | undefined | null): string => String(s ?? '').trim();
 const lista = (a: string[] | undefined | null): string[] => (a ?? []).map((x) => String(x).trim()).filter(Boolean);
-const nombreDe = (u: { name?: string | null; lastname?: string | null } | null | undefined): string => `${u?.name ?? ''} ${u?.lastname ?? ''}`.trim();
+const nombreDe = (u: { name?: string | null; lastname?: string | null } | null | undefined): string => apellidosNombres(u);
 const nombreActor = (user: any): string => texto(user?.nombre) || nombreDe(user);
 const EDITABLES = ['BORRADOR'];
 const nombreArea = (a: string) => ETIQUETA_AREA[a as keyof typeof ETIQUETA_AREA] ?? a;

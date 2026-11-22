@@ -1,5 +1,6 @@
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { FUNCION, funcionesDeRol, rolConFuncion, type CodigoFuncion } from '../../common/permisos/funciones.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 type Persona = { id: string; nombre: string };
 /** Quien puede firmar como líder de bahía: líder, backup asignado a la agencia o auxiliar. */
@@ -19,14 +20,14 @@ export async function agenciasConLider<T extends { id: string }>(prisma: PrismaS
   });
   const de = (agenciaId: string, funcion: CodigoFuncion): Persona | null => {
     const u = personas.find((x) => x.agenciaId === agenciaId && funcionesDeRol(x.role?.capacidades, x.role?.namerol).has(funcion));
-    return u ? { id: u.id, nombre: `${u.name} ${u.lastname}`.trim() } : null;
+    return u ? { id: u.id, nombre: apellidosNombres(u) } : null;
   };
   const firmantesDe = (agenciaId: string): Firmante[] => {
     const lista: Firmante[] = [];
     for (const [funcion, etiqueta] of [[FUNCION.LIDER, 'Líder'], [FUNCION.BACKUP, 'Backup'], [FUNCION.AUXILIAR, 'Auxiliar']] as const) {
       for (const u of personas) {
         if (u.agenciaId === agenciaId && funcionesDeRol(u.role?.capacidades, u.role?.namerol).has(funcion) && !lista.some((x) => x.id === u.id)) {
-          lista.push({ id: u.id, nombre: `${u.name} ${u.lastname}`.trim(), etiqueta });
+          lista.push({ id: u.id, nombre: apellidosNombres(u), etiqueta });
         }
       }
     }

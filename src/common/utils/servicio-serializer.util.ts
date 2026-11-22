@@ -1,3 +1,4 @@
+import { apellidosNombres } from './nombre-persona.js';
 /**
  * Helper de serialización denormalizada para Servicios de Lavado.
  * Garantiza compatibilidad 1-a-1 con los templates de Angular 19 (frontend-easy-dry)
@@ -22,13 +23,13 @@ export function serializeServicioLavado(s: any): any {
         .filter(Boolean)
         .map((operador: any) => ({
           id: String(operador.id),
-          nombre: `${operador.name || ''} ${operador.lastname || ''}`.trim(),
+          nombre: apellidosNombres(operador),
         }))
     : [];
   const operadorNombre = operadoresAsignados.length
     ? operadoresAsignados.map((operador: any) => operador.nombre).join(', ')
     : s.operador
-      ? `${s.operador.name || ''} ${s.operador.lastname || ''}`.trim()
+      ? apellidosNombres(s.operador)
       : s.operadorNombre || '';
 
   const bahiaNombre = s.bahia?.nombre || s.bahiaNombre || '';

@@ -77,7 +77,7 @@ describe('OperacionesService: decisiones sobre servicios (base real)', () => {
       const id = await nuevo('a1');
       await service.aprobarServicio(id, 'ok', actores.aprobador);
 
-      expect(await enBase(id)).toMatchObject({ estado: 'APROBADO', decididoPorId: ids.aprobador, reglaDecision: 'TITULAR', aprobadoPor: `${env.marca}aprobador Prueba` });
+      expect(await enBase(id)).toMatchObject({ estado: 'APROBADO', decididoPorId: ids.aprobador, reglaDecision: 'TITULAR', aprobadoPor: `Prueba ${env.marca}aprobador` });
       const [registro] = await auditoria(id);
       expect(registro).toMatchObject({ accion: 'APROBAR', usuarioId: ids.aprobador, regla: 'TITULAR', agenciaId: a1.id });
     });
