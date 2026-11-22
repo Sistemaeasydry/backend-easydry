@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsInt, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { IsNotEmpty, IsString, IsInt, IsOptional, IsEnum, IsArray, MaxLength } from 'class-validator';
 import { ServiceStatus } from '@prisma/client';
 
 export class CreateServicioDto {
@@ -11,6 +11,7 @@ export class CreateServicioDto {
   @ApiProperty({ example: 'PDF-4589', description: 'Placa del vehículo' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(20, { message: 'La placa o el VIN no puede tener más de 20 caracteres.' })
   placa: string;
 
   @ApiPropertyOptional({ example: 'Toyota', description: 'Marca del vehículo' })

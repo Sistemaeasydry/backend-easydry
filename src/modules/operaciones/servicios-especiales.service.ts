@@ -39,6 +39,7 @@ import {
 import { HistoricoService } from '../archivado/historico.service.js';
 import { ServiciosEspecialesArchivo } from './servicios-especiales-archivo.js';
 import { aUnidadDelInsumo, valorarConsumo } from '../../common/utils/costo-insumo.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** Columnas por las que se puede ordenar la lista de servicios especiales (nombre público → campo de la base). */
 const ORDEN_ESPECIALES = columnasSimples({
@@ -181,7 +182,7 @@ export class ServiciosEspecialesService {
           ? `Zonal ${item.region.nombre}`
           : 'Servicio Móvil Zonal'),
       operadorNombre: item.operador
-        ? `${item.operador.name} ${item.operador.lastname || ''}`.trim()
+        ? apellidosNombres(item.operador)
         : 'Sin asignar',
       regionNombre: item.region?.nombre || item.regionNombre || '',
       videoInicial: item.videoInicialUrl || null,
@@ -212,15 +213,16 @@ export class ServiciosEspecialesService {
       operadoresNombres: Array.isArray(item.operadoresAsignados)
         ? item.operadoresAsignados
             .map((asignacion: any) =>
-              `${asignacion.operador?.name || ''} ${asignacion.operador?.lastname || ''}`.trim(),
+              apellidosNombres(asignacion.operador),
             )
             .filter(Boolean)
         : item.operador
           ? [
-              `${item.operador.name || ''} ${item.operador.lastname || ''}`.trim(),
+              apellidosNombres(item.operador),
             ]
           : [],
       ordenTrabajoOT: item.ordenTrabajoOT || item.codigoSE || item.id,
+      ticket: item.ticket ?? null,
       codigoSE: item.codigoSE || item.ordenTrabajoOT || item.id,
       categoriaServicio: 'ESPECIAL',
       servicioNombre: item.tipoServicio,
@@ -322,6 +324,10 @@ export class ServiciosEspecialesService {
       }
     }
 
+    // Ticket: solo los que lo tienen o solo los que no.
+    if (query.ticket === 'CON') where.ticket = { not: null };
+    else if (query.ticket === 'SIN') where.ticket = null;
+
     if (
       query.tipoServicio &&
       query.tipoServicio !== 'Todos' &&
@@ -337,6 +343,7 @@ export class ServiciosEspecialesService {
       [
         'codigoSE',
         'ordenTrabajoOT',
+        'ticket',
         'placa',
         'modelo',
         'marca',
@@ -604,7 +611,14 @@ export class ServiciosEspecialesService {
       .toUpperCase()
       .trim();
     if (!placa) {
-      throw new BadRequestException('La placa del vehículo es obligatoria.');
+      throw new BadRequestException('La placa o el VIN del vehículo es obligatorio.');
+    }
+    if (placa.length > 20) {
+      throw new BadRequestException('La placa o el VIN no puede tener más de 20 caracteres.');
+    }
+    const ticket = (dto.ticket || '').trim().toUpperCase() || null;
+    if (ticket && !/^[A-Z0-9]{1,10}$/.test(ticket)) {
+      throw new BadRequestException('El ticket solo admite letras y números, hasta 10 caracteres.');
     }
     const marca = vInfo.marca || (dto as any).marca || null;
     const modelo = vInfo.modelo || (dto as any).modelo || null;
@@ -793,6 +807,7 @@ export class ServiciosEspecialesService {
         clientUuid,
         codigoSE,
         ordenTrabajoOT: retoque ? rawOT : codigoSE,
+        ticket,
         tipoServicio: dto.tipoServicio.trim(),
         servicioCatalogoId: catalogoEspecial?.id ?? null,
         precio: precioEspecial,
@@ -815,7 +830,7 @@ export class ServiciosEspecialesService {
         },
         creadoPorId: creatorId || currentUser?.id || null,
         creadoPorNombre: currentUser
-          ? `${currentUser.name || ''} ${currentUser.lastname || ''}`
+          ? apellidosNombres(currentUser)
               .replace(/(CI:[^)]*)/, '')
               .trim() || null
           : null,
@@ -874,7 +889,7 @@ export class ServiciosEspecialesService {
   ): void {
     const ajenos = operadores.filter((o) => o.agenciaId && o.agenciaId !== agenciaId);
     if (!ajenos.length) return;
-    const nombres = ajenos.map((o) => `${o.name || ''} ${o.lastname || ''}`.trim()).filter(Boolean).join(', ');
+    const nombres = ajenos.map((o) => apellidosNombres(o)).filter(Boolean).join(', ');
     throw new BadRequestException(
       `Solo se puede asignar el pulidor fijo de la agencia y pulidores móviles de apoyo${nombres ? `: ${nombres} es fijo de otra agencia` : ''}.`,
     );
@@ -920,8 +935,16 @@ export class ServiciosEspecialesService {
     const texto = (v: string | undefined) => String(v ?? '').trim();
     if (dto.placa !== undefined) {
       const placa = texto(dto.placa).toUpperCase();
-      if (!placa) throw new BadRequestException('La placa no puede quedar vacía.');
+      if (!placa) throw new BadRequestException('La placa o el VIN no puede quedar vacío.');
+      if (placa.length > 20) throw new BadRequestException('La placa o el VIN no puede tener más de 20 caracteres.');
       data.placa = placa;
+    }
+    if (dto.ticket !== undefined) {
+      const ticket = texto(dto.ticket).toUpperCase();
+      if (ticket && !/^[A-Z0-9]{1,10}$/.test(ticket)) {
+        throw new BadRequestException('El ticket solo admite letras y números, hasta 10 caracteres.');
+      }
+      data.ticket = ticket || null;
     }
     if (dto.modelo !== undefined) data.modelo = texto(dto.modelo) || null;
     if (dto.marca !== undefined) data.marca = texto(dto.marca) || null;
@@ -1067,7 +1090,7 @@ export class ServiciosEspecialesService {
         where: { id: { in: operadoresIds.filter((id) => !validos.has(id)) } },
         select: { name: true, lastname: true },
       });
-      const nombres = invalidos.map((u) => `${u.name || ''} ${u.lastname || ''}`.trim()).filter(Boolean).join(', ');
+      const nombres = invalidos.map((u) => apellidosNombres(u)).filter(Boolean).join(', ');
       throw new BadRequestException(
         `Todos los asignados deben ser pulidores activos${nombres ? `: ${nombres} no lo es` : ''}.`,
       );
@@ -1548,7 +1571,7 @@ export class ServiciosEspecialesService {
       videoReanudacionUrl: null,
       usuarioId: currentUser?.id || null,
       usuarioNombre: currentUser?.name
-        ? `${currentUser.name} ${currentUser.lastname || ''}`.trim()
+        ? apellidosNombres(currentUser)
         : null,
     });
 

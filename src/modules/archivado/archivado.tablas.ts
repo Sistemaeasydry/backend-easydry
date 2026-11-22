@@ -423,6 +423,8 @@ export const TABLAS_OPERACION: TablaArchivable[] = [
       { nombre: 'clientUuid', tipo: 'STRING' },
       { nombre: 'codigoSE', tipo: 'STRING' },
       { nombre: 'ordenTrabajoOT', tipo: 'STRING' },
+      // Ticket (opcional). Los lotes archivados antes de este campo no lo traen: el lector une por nombre y lo deja vacío.
+      { nombre: 'ticket', tipo: 'STRING' },
       { nombre: 'tipoServicio', tipo: 'STRING' },
       { nombre: 'servicioCatalogoId', tipo: 'INT32' },
       { nombre: 'precio', tipo: 'DOUBLE' },

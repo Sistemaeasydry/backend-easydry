@@ -9,6 +9,8 @@ import {
   IsIn,
   IsBoolean,
   IsArray,
+  MaxLength,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -58,10 +60,15 @@ export class QueryServicioEspecialDto {
   @IsOptional()
   tipoServicio?: string;
 
-  @ApiPropertyOptional({ description: 'Búsqueda por placa, código o cliente' })
+  @ApiPropertyOptional({ description: 'Búsqueda por placa, código, ticket o cliente' })
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Ticket: CON (solo los que tienen ticket), SIN (solo los que no) o TODOS', enum: ['CON', 'SIN', 'TODOS'] })
+  @IsOptional()
+  @IsIn(['CON', 'SIN', 'TODOS'])
+  ticket?: 'CON' | 'SIN' | 'TODOS';
 
   @ApiPropertyOptional({ example: 1, description: 'Página (1 = primera)' })
   @IsOptional()
@@ -141,6 +148,13 @@ export class CreateServicioEspecialDto {
   @IsString()
   @IsOptional()
   ordenTrabajoOT?: string;
+
+  @ApiPropertyOptional({ description: 'Ticket del servicio (opcional): letras o números, hasta 10 caracteres', example: 'TK2045' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(10, { message: 'El ticket puede tener como máximo 10 caracteres.' })
+  @Matches(/^[A-Za-z0-9]*$/, { message: 'El ticket solo admite letras y números.' })
+  ticket?: string;
 
   @ApiPropertyOptional({
     description: 'Retoque: código SE de la orden ya completada a la que se agrega (hasta 2 días después). Toma de ella la OT, el vehículo, la agencia y el pulidor.',
@@ -437,6 +451,13 @@ export class EditarServicioEspecialDto {
   @IsString()
   @IsOptional()
   observaciones?: string;
+
+  @ApiPropertyOptional({ description: 'Ticket (letras o números, hasta 10). Vacío lo quita.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(10, { message: 'El ticket puede tener como máximo 10 caracteres.' })
+  @Matches(/^[A-Za-z0-9]*$/, { message: 'El ticket solo admite letras y números.' })
+  ticket?: string;
 
   @ApiPropertyOptional({ description: 'Id del servicio especial del catálogo al que se cambia la OT (recalcula precio e insumos)' })
   @IsInt()

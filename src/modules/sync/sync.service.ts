@@ -32,6 +32,7 @@ import {
   resolverAlcance,
   SIN_RESULTADOS,
 } from '../../common/permisos/alcance.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 const publicMediaUrl = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim();
@@ -342,6 +343,11 @@ export class SyncService {
             if (!placa) {
               throw new BadRequestException(
                 'La placa del vehículo es obligatoria.',
+              );
+            }
+            if (placa.length > 20) {
+              throw new BadRequestException(
+                'La placa o el VIN no puede tener más de 20 caracteres.',
               );
             }
             const modelo = String(
@@ -948,6 +954,7 @@ export class SyncService {
                 codigoSE,
                 retoqueDeCodigoSE: mutData.retoqueDeCodigoSE || undefined,
                 ordenTrabajoOT: String(mutData.ordenTrabajoOT || codigoSE),
+                ticket: mutData.ticket ? String(mutData.ticket) : undefined,
                 tipoServicio,
                 servicioCatalogoId:
                   Number(mutData.servicioCatalogoId || mutData.servicioId) ||
@@ -1350,7 +1357,7 @@ export class SyncService {
       user: {
         id: user?.id,
         email: user?.email,
-        nombre: `${user?.name} ${user?.lastname}`.trim(),
+        nombre: apellidosNombres(user),
         role: user?.role?.namerol,
         permisos: modulosDeRol(user?.role),
         agenciaId: user?.agenciaId,
@@ -1845,7 +1852,7 @@ export class SyncService {
         accion,
         usuarioId: String(actor.id),
         usuarioNombre:
-          [actor.name, actor.lastname].filter(Boolean).join(' ').trim() ||
+          apellidosNombres(actor) ||
           actor.email ||
           'Usuario',
         rol: rolDeUsuario(actor),
