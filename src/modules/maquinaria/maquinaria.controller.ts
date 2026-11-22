@@ -22,7 +22,10 @@ import {
 import {
   AgregarEvidenciaDto,
   AsignarOperadorDto,
+  AvanceIncidenteDto,
+  AvanceMantenimientoDto,
   ConfigurarVentanaDto,
+  DecidirLimpiezaDto,
   DetalleMaquinariaDto,
   EditarIncidenteDto,
   EditarLimpiezaDto,
@@ -37,6 +40,7 @@ import {
 
 import { Permiso } from '../../common/permisos/permisos.decorators.js';
 import { tienePermiso } from '../../common/permisos/capacidades.js';
+import { FUNCION, tieneFuncion } from '../../common/permisos/funciones.js';
 @ApiTags('Taller & Maquinaria (100% POST)')
 @Controller('maquinaria')
 @ApiBearerAuth()
@@ -105,6 +109,10 @@ export class MaquinariaController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Configurar cuántos días/semanas antes se puede ejecutar un mantenimiento de esta máquina' })
   async configurarVentana(@Body() dto: ConfigurarVentanaDto, @CurrentUser() user: any) {
+    // La ventana la define solo el coordinador de mantenimiento (o un administrador): el asistente la ve pero no la cambia.
+    if (!tieneFuncion(user, FUNCION.COORD_MANTENIMIENTO) && !tieneFuncion(user, FUNCION.ADMINISTRADOR)) {
+      throw new ForbiddenException('Solo el coordinador de mantenimiento puede configurar la ventana de adelanto.');
+    }
     return this.maquinariaService.configurarVentana(dto, actorFromUser(user));
   }
 
@@ -134,6 +142,22 @@ export class MaquinariaController {
   @ApiOperation({ summary: 'Asignar la incidencia a un técnico de la región o al propio coordinador' })
   async asignarIncidente(@Body() dto: AsignarIncidenteDto, @CurrentUser() user: any) {
     return this.maquinariaService.asignarIncidente(dto, actorFromUser(user));
+  }
+
+  @Permiso('taller.incidentes.resolver')
+  @Post('incidentes/en-camino')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'El técnico asignado marca la incidencia «en camino»; avisa a quien la reportó y a los coordinadores' })
+  async incidenteEnCamino(@Body() dto: AvanceIncidenteDto, @CurrentUser() user: any) {
+    return this.maquinariaService.avanzarIncidente(dto, actorFromUser(user), 'EN_CAMINO');
+  }
+
+  @Permiso('taller.incidentes.resolver')
+  @Post('incidentes/atendiendo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'El técnico asignado marca la incidencia «atendiendo»; avisa a quien la reportó y a los coordinadores' })
+  async incidenteAtendiendo(@Body() dto: AvanceIncidenteDto, @CurrentUser() user: any) {
+    return this.maquinariaService.avanzarIncidente(dto, actorFromUser(user), 'ATENDIENDO');
   }
 
   @Permiso('taller.incidentes.resolver', 'taller.incidentes.cancelar')
@@ -191,6 +215,22 @@ export class MaquinariaController {
   @ApiOperation({ summary: 'Asignar el mantenimiento a un técnico de la región o al propio coordinador' })
   async asignarMantenimiento(@Body() dto: AsignarMantenimientoDto, @CurrentUser() user: any) {
     return this.maquinariaService.asignarMantenimiento(dto, actorFromUser(user));
+  }
+
+  @Permiso('taller.mantenimientos.ejecutar')
+  @Post('mantenimientos/en-camino')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'El asistente asignado marca el mantenimiento «en camino»; avisa a su coordinador y a quien lo programó' })
+  async mantenimientoEnCamino(@Body() dto: AvanceMantenimientoDto, @CurrentUser() user: any) {
+    return this.maquinariaService.avanzarMantenimiento(dto, actorFromUser(user), 'EN_CAMINO');
+  }
+
+  @Permiso('taller.mantenimientos.ejecutar')
+  @Post('mantenimientos/atendiendo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'El asistente asignado marca el mantenimiento «atendiendo»; avisa a su coordinador y a quien lo programó' })
+  async mantenimientoAtendiendo(@Body() dto: AvanceMantenimientoDto, @CurrentUser() user: any) {
+    return this.maquinariaService.avanzarMantenimiento(dto, actorFromUser(user), 'ATENDIENDO');
   }
 
   @Permiso('taller.mantenimientos.ejecutar')
@@ -267,6 +307,14 @@ export class MaquinariaController {
   @ApiOperation({ summary: 'Corregir las observaciones de un registro de limpieza (admin, supervisor y coordinador de mantenimiento de su región)' })
   async editarLimpieza(@Body() dto: EditarLimpiezaDto, @CurrentUser() user: any) {
     return this.maquinariaService.editarLimpieza(dto, actorFromUser(user));
+  }
+
+  @Permiso('taller.limpiezas.aprobar')
+  @Post('limpiezas/decidir')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Aprobar o rechazar una limpieza (el rechazo exige motivo y avisa a quien la registró)' })
+  async decidirLimpieza(@Body() dto: DecidirLimpiezaDto, @CurrentUser() user: any) {
+    return this.maquinariaService.decidirLimpieza(dto, actorFromUser(user));
   }
 
   @Permiso('taller.limpiezas.editar')

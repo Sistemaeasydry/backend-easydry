@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, IsNumber, IsArray, IsIn, Min, Max, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, IsNumber, IsArray, IsIn, Min, Max, Matches, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -22,6 +22,12 @@ export const TIPOS_EVENTO_MAQUINARIA = [
   'LIMPIEZA_REGISTRADA',
   'LIMPIEZA_EDITADA',
   'LIMPIEZA_ELIMINADA',
+  'LIMPIEZA_APROBADA',
+  'LIMPIEZA_RECHAZADA',
+  'INCIDENTE_EN_CAMINO',
+  'INCIDENTE_ATENDIENDO',
+  'MANTENIMIENTO_EN_CAMINO',
+  'MANTENIMIENTO_ATENDIENDO',
 ] as const;
 export type TipoEventoMaquinaria = (typeof TIPOS_EVENTO_MAQUINARIA)[number];
 
@@ -305,6 +311,39 @@ export class EditarLimpiezaDto {
   @IsOptional()
   @IsString()
   observaciones?: string;
+}
+
+/** Avance del técnico asignado sobre una incidencia: «en camino» o «atendiendo». */
+export class AvanceIncidenteDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  incidenteId: string;
+}
+
+/** Avance del técnico asignado sobre un mantenimiento: «en camino» o «atendiendo». */
+export class AvanceMantenimientoDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  mantenimientoId: string;
+}
+
+export class DecidirLimpiezaDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  limpiezaId: string;
+
+  @ApiProperty({ description: 'true aprueba la limpieza; false la rechaza (y entonces el motivo es obligatorio).' })
+  @IsBoolean()
+  aprobada: boolean;
+
+  @ApiPropertyOptional({ description: 'Por qué no se aprobó la limpieza. Obligatorio al rechazar.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  motivo?: string;
 }
 
 export class EliminarLimpiezaDto {

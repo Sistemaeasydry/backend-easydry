@@ -48,6 +48,9 @@ import {
   EditarIncidenteDto,
   EditarLimpiezaDto,
   EditarMantenimientoDto,
+  AvanceIncidenteDto,
+  AvanceMantenimientoDto,
+  DecidirLimpiezaDto,
   EliminarLimpiezaDto,
   EvidenciaInputDto,
   ExportarLimpiezasDto,
@@ -80,6 +83,7 @@ import {
   limpiezaAtrasada as limpiezaAtrasadaUtil,
   reglaLimpieza as reglaLimpiezaUtil,
 } from '../../common/utils/limpieza-maquinaria.js';
+import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -231,7 +235,7 @@ export class MaquinariaService {
   }
 
   private shortName(u?: { name?: string | null; lastname?: string | null } | null): string {
-    return [u?.name, u?.lastname].filter(Boolean).join(' ');
+    return apellidosNombres(u);
   }
 
   // ==============================================================
@@ -322,6 +326,22 @@ export class MaquinariaService {
     }
     if (!regionMaquina || u.regionId !== regionMaquina) {
       throw new BadRequestException('El técnico debe pertenecer a la misma región que la máquina.');
+    }
+  }
+
+  /** El coordinador del mantenimiento debe ser un coordinador de mantenimiento activo de la región de la máquina (o un administrador). */
+  private async validarCoordinador(userId: string, regionMaquina: string | null): Promise<void> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, estado: true, regionId: true, role: { select: { namerol: true, capacidades: true } } },
+    });
+    if (!u || u.estado !== 1) throw new NotFoundException('El coordinador indicado no existe o está inactivo.');
+    const f = funcionesDeRol(u.role.capacidades, u.role.namerol);
+    if (!f.has(FUNCION.COORD_MANTENIMIENTO) && !f.has(FUNCION.ADMINISTRADOR)) {
+      throw new BadRequestException('El coordinador debe ser un coordinador de mantenimiento.');
+    }
+    if (!f.has(FUNCION.ADMINISTRADOR) && (!regionMaquina || u.regionId !== regionMaquina)) {
+      throw new BadRequestException('El coordinador debe pertenecer a la misma región que la máquina.');
     }
   }
 
@@ -1046,6 +1066,8 @@ export class MaquinariaService {
         data: {
           tecnicoAsignadoId: tecnicoId,
           fechaAsignacion: new Date(),
+          fechaEnCamino: null,
+          fechaAtendiendo: null,
           estado: 'EN_PROCESO',
           destinoTallerId: dto.destinoTallerId || inc.destinoTallerId,
         },
@@ -1080,6 +1102,88 @@ export class MaquinariaService {
       );
     }
     return { success: true, data: this.ubicacionIncidente(updated) };
+  }
+
+  /**
+   * El técnico asignado marca «en camino» o «atendiendo» la incidencia. Quien la reportó y los coordinadores de mantenimiento de la
+   * región reciben el aviso. Cada paso se guarda con su fecha y hora, y se reinicia si la incidencia se reasigna.
+   */
+  async avanzarIncidente(dto: AvanceIncidenteDto, actor: Actor, etapa: 'EN_CAMINO' | 'ATENDIENDO') {
+    const inc = await this.cargarIncidente(dto.incidenteId);
+    const maquina = inc.maquinaria as unknown as MaquinaCtx;
+    if (inc.estado === 'RESUELTO' || inc.estado === 'CANCELADO') throw new BadRequestException('La incidencia ya está cerrada.');
+    if (!inc.tecnicoAsignadoId) throw new BadRequestException('La incidencia aún no tiene técnico asignado.');
+    if (inc.tecnicoAsignadoId !== actor.id && !esAdmin(actor)) {
+      throw new ForbiddenException('Solo el técnico asignado puede marcar el avance de esta incidencia.');
+    }
+    if (etapa === 'EN_CAMINO' && inc.fechaAtendiendo) throw new BadRequestException('La incidencia ya se está atendiendo.');
+    if ((etapa === 'EN_CAMINO' && inc.fechaEnCamino) || (etapa === 'ATENDIENDO' && inc.fechaAtendiendo)) {
+      return { success: true, data: this.ubicacionIncidente(inc), sinCambios: true };
+    }
+
+    const ahora = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.incidenteTecnico.update({
+        where: { id: inc.id },
+        data: etapa === 'EN_CAMINO' ? { fechaEnCamino: ahora } : { fechaAtendiendo: ahora },
+        include: this.includeIncidente,
+      });
+      await this.registrarEvento(tx, maquina, etapa === 'EN_CAMINO' ? 'INCIDENTE_EN_CAMINO' : 'INCIDENTE_ATENDIENDO', actor.id, inc.id, { titulo: inc.titulo });
+      return u;
+    });
+
+    const coordinadores = await this.notifications.resolverDestinatariosPorRol({ regionales: [FUNCION.COORD_MANTENIMIENTO], regionId: this.regionDe(maquina) });
+    const destinatarios = [...new Set([inc.reportadoPorId, ...coordinadores].filter((id): id is string => !!id && id !== actor.id))];
+    if (destinatarios.length) {
+      const tecnico = this.shortName((updated as { tecnicoAsignado?: { name?: string | null; lastname?: string | null } | null }).tecnicoAsignado);
+      void this.notifications.notificarUsuarios(
+        destinatarios,
+        etapa === 'EN_CAMINO' ? `Técnico en camino: ${maquina.codigo}` : `Atendiendo la incidencia: ${maquina.codigo}`,
+        `${inc.titulo}${tecnico ? ` · ${tecnico}` : ''}`,
+        { type: etapa === 'EN_CAMINO' ? 'INCIDENTE_EN_CAMINO' : 'INCIDENTE_ATENDIENDO', incidenteId: inc.id, maquinariaId: maquina.id },
+        { tipo: etapa === 'EN_CAMINO' ? 'INCIDENCIA_EN_CAMINO' : 'INCIDENCIA_ATENDIENDO', entidadTipo: 'MAQUINARIA', entidadId: maquina.id },
+      );
+    }
+    return { success: true, data: this.ubicacionIncidente(updated) };
+  }
+
+  /** Igual que `avanzarIncidente`, para el mantenimiento: avisa a su coordinador y a quien lo programó. */
+  async avanzarMantenimiento(dto: AvanceMantenimientoDto, actor: Actor, etapa: 'EN_CAMINO' | 'ATENDIENDO') {
+    const m = await this.cargarMantenimiento(dto.mantenimientoId);
+    const maquina = m.maquinaria as unknown as MaquinaCtx;
+    if (m.estado === 'FINALIZADO') throw new BadRequestException('El mantenimiento ya fue ejecutado.');
+    if (!m.tecnicoId) throw new BadRequestException('El mantenimiento aún no tiene asistente asignado.');
+    if (m.tecnicoId !== actor.id && !esAdmin(actor)) {
+      throw new ForbiddenException('Solo el asistente asignado puede marcar el avance de este mantenimiento.');
+    }
+    if (etapa === 'EN_CAMINO' && m.fechaAtendiendo) throw new BadRequestException('El mantenimiento ya se está atendiendo.');
+    if ((etapa === 'EN_CAMINO' && m.fechaEnCamino) || (etapa === 'ATENDIENDO' && m.fechaAtendiendo)) {
+      return { success: true, data: m, sinCambios: true };
+    }
+
+    const ahora = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.mantenimientoMaquinaria.update({
+        where: { id: m.id },
+        data: etapa === 'EN_CAMINO' ? { fechaEnCamino: ahora } : { fechaAtendiendo: ahora },
+        include: this.includeMantenimiento,
+      });
+      await this.registrarEvento(tx, maquina, etapa === 'EN_CAMINO' ? 'MANTENIMIENTO_EN_CAMINO' : 'MANTENIMIENTO_ATENDIENDO', actor.id, m.id, {});
+      return u;
+    });
+
+    const destinatarios = [...new Set([m.coordinadorId, m.creadoPorId].filter((id): id is string => !!id && id !== actor.id))];
+    if (destinatarios.length) {
+      const tecnico = this.shortName((updated as { tecnico?: { name?: string | null; lastname?: string | null } | null }).tecnico);
+      void this.notifications.notificarUsuarios(
+        destinatarios,
+        etapa === 'EN_CAMINO' ? `Asistente en camino: ${maquina.codigo}` : `Atendiendo el mantenimiento: ${maquina.codigo}`,
+        `Programado para ${(m.fechaProgramada ?? m.fechaMantenimiento).toISOString().slice(0, 10)}${tecnico ? ` · ${tecnico}` : ''}`,
+        { type: etapa === 'EN_CAMINO' ? 'MANTENIMIENTO_EN_CAMINO' : 'MANTENIMIENTO_ATENDIENDO', mantenimientoId: m.id, maquinariaId: maquina.id },
+        { tipo: etapa === 'EN_CAMINO' ? 'MANTENIMIENTO_EN_CAMINO' : 'MANTENIMIENTO_ATENDIENDO', entidadTipo: 'MAQUINARIA', entidadId: maquina.id },
+      );
+    }
+    return { success: true, data: updated };
   }
 
   async resolverIncidente(dto: ResolverIncidenteDto, actor: Actor, puedeSubirEvidencias = true) {
@@ -1342,6 +1446,7 @@ export class MaquinariaService {
       },
     },
     tecnico: { select: { id: true, name: true, lastname: true } },
+    coordinador: { select: { id: true, name: true, lastname: true } },
     creadoPor: { select: { id: true, name: true, lastname: true } },
     ejecutadoPor: { select: { id: true, name: true, lastname: true } },
     evidencias: { where: { activa: true }, orderBy: { creadaEn: 'asc' as const } },
@@ -1360,6 +1465,9 @@ export class MaquinariaService {
     // El técnico es opcional: sin él queda «sin técnico asignado» hasta que alguien lo asigne.
     const tecnicoId = dto.tecnicoId || null;
     if (tecnicoId) await this.validarResponsable(tecnicoId, this.regionDe(maquina));
+    // El coordinador también es opcional al programar: es obligatorio recién al asignar.
+    const coordinadorId = dto.coordinadorId || null;
+    if (coordinadorId) await this.validarCoordinador(coordinadorId, this.regionDe(maquina));
     const evidencias = await this.verificarEvidencias(maquina, dto.evidencias, {});
 
     const fechaProgramada = dto.fechaProgramada ? new Date(dto.fechaProgramada) : new Date();
@@ -1376,6 +1484,7 @@ export class MaquinariaService {
         data: {
           maquinariaId: maquina.id,
           tecnicoId,
+          coordinadorId,
           creadoPorId: actor.id,
           estado: 'PENDIENTE',
           observaciones: dto.observaciones,
@@ -1395,13 +1504,15 @@ export class MaquinariaService {
         programadoPara: fechaProgramada,
         frecuenciaDias,
         tecnicoId,
+        coordinadorId,
       });
       return m;
     });
 
-    if (tecnicoId && tecnicoId !== actor.id) {
+    const avisar = [...new Set([tecnicoId, coordinadorId].filter((id): id is string => !!id && id !== actor.id))];
+    if (avisar.length) {
       void this.notifications.notificarUsuarios(
-        [tecnicoId],
+        avisar,
         `Mantenimiento asignado: ${maquina.codigo}`,
         `Programado para ${fechaProgramada.toISOString().slice(0, 10)}`,
         { type: 'MANTENIMIENTO_ASIGNADO', mantenimientoId: mantenimiento.id, maquinariaId: maquina.id },
@@ -1426,26 +1537,34 @@ export class MaquinariaService {
     assertRegion(actor, this.regionDe(maquina));
     if (m.estado === 'FINALIZADO') throw new BadRequestException('El mantenimiento ya fue ejecutado.');
 
-    const tecnicoId = dto.tecnicoId || actor.id;
+    // Al asignar son obligatorios el coordinador y el asistente (al programar eran opcionales).
+    const tecnicoId = dto.tecnicoId?.trim();
+    const coordinadorId = dto.coordinadorId?.trim();
+    if (!coordinadorId) throw new BadRequestException('Elige el coordinador de mantenimiento.');
+    if (!tecnicoId) throw new BadRequestException('Elige el asistente de mantenimiento.');
+    await this.validarCoordinador(coordinadorId, this.regionDe(maquina));
     await this.validarResponsable(tecnicoId, this.regionDe(maquina));
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.mantenimientoMaquinaria.update({
         where: { id: m.id },
-        data: { tecnicoId, estado: 'EN_PROCESO' },
+        data: { tecnicoId, coordinadorId, fechaEnCamino: null, fechaAtendiendo: null, estado: 'EN_PROCESO' },
         include: this.includeMantenimiento,
       });
       await this.registrarEvento(tx, maquina, 'MANTENIMIENTO_ASIGNADO', actor.id, m.id, {
         anterior: m.tecnicoId,
         nuevo: tecnicoId,
+        coordinadorAnterior: m.coordinadorId ?? null,
+        coordinador: coordinadorId,
         autoAsignado: tecnicoId === actor.id,
       });
       return u;
     });
 
-    if (tecnicoId !== actor.id) {
+    const avisar = [...new Set([tecnicoId, coordinadorId].filter((id) => id !== actor.id))];
+    if (avisar.length) {
       void this.notifications.notificarUsuarios(
-        [tecnicoId],
+        avisar,
         `Mantenimiento asignado: ${maquina.codigo}`,
         `Programado para ${(m.fechaProgramada ?? m.fechaMantenimiento).toISOString().slice(0, 10)}`,
         { type: 'MANTENIMIENTO_ASIGNADO', mantenimientoId: m.id, maquinariaId: maquina.id },
@@ -1808,6 +1927,10 @@ export class MaquinariaService {
             data: {
               fotos: [...existente.fotos, ...urls],
               observaciones: dto.observaciones?.trim() || existente.observaciones,
+              // Una limpieza rechazada que se vuelve a subir queda otra vez pendiente de revisión.
+              ...(existente.estadoRevision === 'RECHAZADA'
+                ? { estadoRevision: 'PENDIENTE', revisadoPorId: null, fechaRevision: null }
+                : {}),
             },
           })
         : await tx.limpiezaMaquinaria.create({
@@ -1857,6 +1980,7 @@ export class MaquinariaService {
         include: {
           maquinaria: { select: { id: true, codigo: true, nombre: true } },
           registradoPor: { select: { id: true, name: true, lastname: true } },
+          revisadoPor: { select: { id: true, name: true, lastname: true } },
         },
       }),
       this.prisma.limpiezaMaquinaria.count({ where }),
@@ -1916,6 +2040,10 @@ export class MaquinariaService {
    * instantánea de lo que tenía). Mismo alcance que editarLimpieza.
    */
   async eliminarLimpieza(dto: EliminarLimpiezaDto, actor: Actor) {
+    // El coordinador de mantenimiento no elimina: revisa (aprueba o rechaza). Borrar un registro es solo de los administradores.
+    if (!esAdmin(actor)) {
+      throw new ForbiddenException('Solo un administrador puede eliminar una limpieza. Apruébala o recházala con el motivo.');
+    }
     const limpieza = await this.cargarLimpieza(dto.limpiezaId);
     const maquina = limpieza.maquinaria as unknown as MaquinaCtx;
     assertRegion(actor, this.regionDe(maquina));
@@ -1931,6 +2059,64 @@ export class MaquinariaService {
       await tx.limpiezaMaquinaria.delete({ where: { id: limpieza.id } });
     });
     return { success: true };
+  }
+
+  /**
+   * El coordinador de mantenimiento (o quien tenga el permiso) aprueba o rechaza una limpieza. Al rechazar, el motivo es
+   * obligatorio y quien la registró recibe la notificación (con alerta en la app y en la web).
+   */
+  async decidirLimpieza(dto: DecidirLimpiezaDto, actor: Actor) {
+    const limpieza = await this.cargarLimpieza(dto.limpiezaId);
+    const maquina = limpieza.maquinaria as unknown as MaquinaCtx;
+    assertRegion(actor, this.regionDe(maquina));
+
+    const motivo = dto.motivo?.trim() || '';
+    if (!dto.aprobada && !motivo) {
+      throw new BadRequestException('Escribe el motivo por el que no se aprueba la limpieza.');
+    }
+    const nuevoEstado = dto.aprobada ? 'APROBADA' : 'RECHAZADA';
+    if (limpieza.estadoRevision === nuevoEstado && (dto.aprobada || limpieza.motivoRechazo === motivo)) {
+      return { success: true, data: limpieza, sinCambios: true };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.limpiezaMaquinaria.update({
+        where: { id: limpieza.id },
+        data: {
+          estadoRevision: nuevoEstado,
+          revisadoPorId: actor.id,
+          fechaRevision: new Date(),
+          motivoRechazo: dto.aprobada ? null : motivo,
+        },
+      });
+      await this.registrarEvento(tx, maquina, dto.aprobada ? 'LIMPIEZA_APROBADA' : 'LIMPIEZA_RECHAZADA', actor.id, limpieza.id, {
+        fecha: limpieza.fecha.toISOString(),
+        tipo: limpieza.tipo,
+        motivo: dto.aprobada ? null : motivo,
+      });
+      return u;
+    });
+
+    if (dto.aprobada && limpieza.registradoPorId !== actor.id) {
+      void this.notifications.notificarUsuarios(
+        [limpieza.registradoPorId],
+        `Limpieza aprobada: ${maquina.codigo}`,
+        `La limpieza del ${limpieza.fecha.toISOString().slice(0, 10)} fue aprobada.`,
+        { type: 'LIMPIEZA_APROBADA', maquinariaId: maquina.id, limpiezaId: limpieza.id },
+        { tipo: 'LIMPIEZA_APROBADA', entidadTipo: 'LIMPIEZA', entidadId: limpieza.id },
+      );
+    }
+    if (!dto.aprobada && limpieza.registradoPorId !== actor.id) {
+      const dia = limpieza.fecha.toISOString().slice(0, 10);
+      void this.notifications.notificarUsuarios(
+        [limpieza.registradoPorId],
+        `Limpieza no aprobada: ${maquina.codigo}`,
+        `La limpieza del ${dia} no fue aprobada. Motivo: ${motivo}`,
+        { type: 'LIMPIEZA_RECHAZADA', maquinariaId: maquina.id, limpiezaId: limpieza.id },
+        { tipo: 'LIMPIEZA_RECHAZADA', entidadTipo: 'LIMPIEZA', entidadId: limpieza.id },
+      );
+    }
+    return { success: true, data: updated };
   }
 
   /** Historial completo (hasta 5000 filas) dentro del alcance del actor, para exportar a CSV desde el cliente. */

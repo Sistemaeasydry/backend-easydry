@@ -383,6 +383,11 @@ export class RegistrarMantenimientoDto {
   @IsString()
   observaciones?: string;
 
+  @ApiPropertyOptional({ description: 'Coordinador de mantenimiento responsable. Opcional al programar.' })
+  @IsOptional()
+  @IsString()
+  coordinadorId?: string;
+
   @ApiPropertyOptional({ description: 'Array de repuestos o insumos utilizados', example: [{ repuesto: 'Empacadura Viton', cantidad: 2, costo: 15.50 }] })
   @IsOptional()
   repuestosUsados?: any;
@@ -542,10 +547,15 @@ export class AsignarMantenimientoDto {
   @IsNotEmpty()
   mantenimientoId: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty({ description: 'Coordinador de mantenimiento responsable. Obligatorio al asignar.' })
   @IsString()
-  tecnicoId?: string;
+  @IsNotEmpty({ message: 'Elige el coordinador de mantenimiento.' })
+  coordinadorId: string;
+
+  @ApiProperty({ description: 'Asistente (técnico) que ejecuta el mantenimiento. Obligatorio al asignar.' })
+  @IsString()
+  @IsNotEmpty({ message: 'Elige el asistente de mantenimiento.' })
+  tecnicoId: string;
 }
 
 export class TransferirMaquinariaDto {
