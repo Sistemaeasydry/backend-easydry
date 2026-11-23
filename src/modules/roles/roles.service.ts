@@ -12,6 +12,7 @@ import { listarPaginable } from '../../common/utils/listado-paginable.js';
 import { AMBITOS, CATALOGO_PERMISOS, CATEGORIAS_ROL, esCategoriaRol, ROL_SUPER_ADMIN, esAmbito, esCodigoPermiso } from '../../common/permisos/catalogo-permisos.js';
 import { normalizarRol, rolDeUsuario } from '../../common/permisos/alias-roles.js';
 import { FUNCION, funcionesDeRol } from '../../common/permisos/funciones.js';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ambitoDeUsuario, tienePermiso } from '../../common/permisos/capacidades.js';
 import { accionesLegacy } from '../../common/permisos/acciones-legacy.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -37,6 +38,8 @@ export class RolesService implements OnModuleInit {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     @Optional() private cache?: CacheService,
+    /** Deja constancia de cada cambio de un rol con lo que se agregó y se quitó. */
+    @Optional() private auditoria?: AuditoriaService,
   ) {}
 
   /**
@@ -374,6 +377,31 @@ export class RolesService implements OnModuleInit {
     const cambioPermisos =
       (dataToUpdate.capacidades !== undefined && !listasIguales(role.capacidades, dataToUpdate.capacidades)) ||
       (dataToUpdate.ambito !== undefined && dataToUpdate.ambito !== role.ambito);
+    // Auditoría: qué cambió en el rol (incluye casillas como «Timbrada obligatoria»).
+    const antes = { namerol: role.namerol, descripcion: role.descripcion, estado: role.estado, ambito: role.ambito, categoria: role.categoria };
+    const despues = { namerol: updated.namerol, descripcion: updated.descripcion, estado: updated.estado, ambito: updated.ambito, categoria: updated.categoria };
+    const anteriores = role.capacidades ?? [];
+    const actuales = updated.capacidades ?? [];
+    const agregadas = actuales.filter((c) => !anteriores.includes(c));
+    const quitadas = anteriores.filter((c) => !actuales.includes(c));
+    const campos = (Object.keys(antes) as Array<keyof typeof antes>).filter((k) => antes[k] !== despues[k]);
+    if (campos.length > 0 || agregadas.length > 0 || quitadas.length > 0) {
+      void this.auditoria?.registrar(
+        {
+          modulo: 'usuarios',
+          accion: 'usuarios.roles.editar',
+          metodo: 'POST',
+          ruta: 'roles/update',
+          resumen: `Rol «${updated.namerol}» editado${agregadas.length || quitadas.length ? `: ${agregadas.length} permiso(s) agregado(s), ${quitadas.length} quitado(s)` : ''}`,
+          entidadTipo: 'rol',
+          entidadId: updated.id,
+          antes: { ...antes, permisosQuitados: quitadas },
+          despues: { ...despues, permisosAgregados: agregadas },
+        },
+        actor,
+      );
+    }
+
     if (cambioPermisos) {
       await this.notifications.notificarCambioPermisosRol({
         roleId: updated.id,

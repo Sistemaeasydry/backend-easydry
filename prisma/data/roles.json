@@ -22,10 +22,11 @@
       "informes-inspeccion",
       "auditorias-5s",
       "configuracion/sellos",
-      "usuarios",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "usuarios",
+      "auditoria",
+      "perfil"
     ],
     "capacidades": [
       "agencias.agencias.crear",
@@ -276,7 +277,13 @@
       "rrhh.horarios.gestionar",
       "rrhh-timbradas.horarios.editar",
       "rrhh-timbradas.horarios.ajustes",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrar",
+      "pagina.rrhh-timbradas.marcar",
+      "auditoria.ver",
+      "auditoria.exportar",
+      "auditoria.bitacora",
+      "pagina.auditoria"
     ],
     "acciones": {
       "verTodasSucursales": true,
@@ -315,9 +322,9 @@
       "servicios",
       "aprobaciones",
       "reportes",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -403,9 +410,9 @@
       "reportes",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -475,7 +482,9 @@
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
       "pagina.rrhh-timbradas",
-      "pagina.rrhh-timbradas.marcar"
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -519,9 +528,9 @@
       "envios",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -609,15 +618,15 @@
       "funcion.backup",
       "rrhh.timbrar",
       "rrhh.tareas.propias",
-      "rrhh.tareas.asignar",
       "rrhh.timbradas.ver",
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
-      "pagina.rrhh-tareas.asignadas",
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -661,9 +670,9 @@
       "envios",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -760,7 +769,9 @@
       "rrhh.timbradas.ver",
       "pagina.rrhh-tareas.asignadas",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -804,9 +815,9 @@
       "reportes",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -897,7 +908,9 @@
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": true,
@@ -943,9 +956,9 @@
       "reportes",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.consultar",
@@ -1037,7 +1050,9 @@
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -1078,9 +1093,9 @@
       "inventario",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -1159,7 +1174,9 @@
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -1204,9 +1221,9 @@
       "reportes",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -1295,7 +1312,9 @@
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -1340,9 +1359,9 @@
       "reportes",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.consultar",
@@ -1426,7 +1445,9 @@
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
       "pagina.rrhh-timbradas",
-      "pagina.rrhh-timbradas.marcar"
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": true,
@@ -1462,9 +1483,9 @@
       "notificaciones",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "informes.ver",
@@ -1480,7 +1501,9 @@
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
       "pagina.rrhh-timbradas",
-      "pagina.rrhh-timbradas.marcar"
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -1524,9 +1547,9 @@
       "envios",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -1614,15 +1637,15 @@
       "funcion.lider",
       "rrhh.timbrar",
       "rrhh.tareas.propias",
-      "rrhh.tareas.asignar",
       "rrhh.timbradas.ver",
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
-      "pagina.rrhh-tareas.asignadas",
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -1665,9 +1688,9 @@
       "envios",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "agencias.ver",
@@ -1743,7 +1766,9 @@
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
       "pagina.rrhh-timbradas",
-      "pagina.rrhh-timbradas.marcar"
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -1796,6 +1821,7 @@
       "rrhh/timbradas",
       "rrhh/dotaciones",
       "usuarios",
+      "auditoria",
       "perfil"
     ],
     "capacidades": [
@@ -2062,7 +2088,13 @@
       "dotaciones.entregas.registrar",
       "dotaciones.productos.gestionar",
       "dotaciones.productos.ingreso",
-      "dotaciones.planes.gestionar"
+      "dotaciones.planes.gestionar",
+      "rrhh.timbrar",
+      "pagina.rrhh-timbradas.marcar",
+      "auditoria.ver",
+      "auditoria.exportar",
+      "auditoria.bitacora",
+      "pagina.auditoria"
     ],
     "acciones": {
       "verTodasSucursales": true,
@@ -2110,10 +2142,10 @@
       "reportes",
       "informes-inspeccion",
       "auditorias-5s",
-      "usuarios",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "usuarios",
+      "perfil"
     ],
     "capacidades": [
       "agencias.agencias.editar",
@@ -2232,7 +2264,9 @@
       "pagina.rrhh-timbradas",
       "pagina.rrhh-timbradas.marcar",
       "pagina.rrhh-timbradas.equipo",
-      "pagina.rrhh-timbradas.horarios"
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -2271,9 +2305,9 @@
       "taller-tecnico",
       "informes-inspeccion",
       "auditorias-5s",
-      "perfil",
       "rrhh/tareas",
-      "rrhh/timbradas"
+      "rrhh/timbradas",
+      "perfil"
     ],
     "capacidades": [
       "dashboard.ver",
@@ -2316,7 +2350,9 @@
       "pagina.rrhh-tareas",
       "pagina.rrhh-tareas.mis",
       "pagina.rrhh-timbradas",
-      "pagina.rrhh-timbradas.marcar"
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria"
     ],
     "acciones": {
       "verTodasSucursales": false,
@@ -2333,6 +2369,121 @@
       "verTodosServicios": false,
       "verMaquinaria": true,
       "gestionarMantenimiento": true,
+      "registrarIncidente": false,
+      "verReportes": true,
+      "verProductividadGlobal": false,
+      "verConfiguracion": false,
+      "gestionarInventario": false,
+      "despacharSuministros": false,
+      "accionesEnvios": false
+    }
+  },
+  {
+    "namerol": "TALENTO_HUMANO",
+    "descripcion": "Talento Humano: gestiona todo RRHH a nivel nacional (timbradas, horarios, tareas, ubicaciones y dotaciones). Ve usuarios y lavadores sin editarlos.",
+    "estado": 1,
+    "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
+    "permisos": [
+      "dashboard",
+      "notificaciones",
+      "agencias",
+      "operadores",
+      "configuracion/servicios",
+      "reportes",
+      "rrhh/tareas",
+      "rrhh/timbradas",
+      "rrhh/dotaciones",
+      "usuarios",
+      "perfil"
+    ],
+    "capacidades": [
+      "agencias.consultar",
+      "agencias.ver",
+      "usuarios.ver",
+      "catalogo.ver",
+      "dashboard.ver",
+      "operadores.ver",
+      "dotaciones.ver",
+      "dotaciones.gestionar",
+      "dotaciones.entregar",
+      "sync.usar",
+      "rrhh.timbrar",
+      "rrhh.tareas.propias",
+      "rrhh.tareas.asignar",
+      "rrhh.tareas.crear",
+      "rrhh.tareas.revisar",
+      "rrhh.tareas.cancelar",
+      "rrhh.tareas.reasignar",
+      "rrhh.timbradas.ver",
+      "rrhh.ubicaciones.gestionar",
+      "rrhh.ubicaciones.quitar",
+      "rrhh.horarios.gestionar",
+      "pagina.dashboard",
+      "pagina.notificaciones",
+      "pagina.agencias",
+      "pagina.agencias.agencias",
+      "agencias.personal.ver",
+      "agencias.agencias.ubicacion",
+      "agencias.agencias.ubicacion.quitar",
+      "pagina.agencias.regiones",
+      "pagina.agencias.clientes",
+      "pagina.agencias.aprobadores",
+      "pagina.operadores",
+      "pagina.catalogo",
+      "pagina.catalogo.generales",
+      "pagina.catalogo.especiales",
+      "pagina.rrhh-tareas",
+      "pagina.rrhh-tareas.mis",
+      "pagina.rrhh-tareas.asignadas",
+      "rrhh-tareas.asignadas.crear",
+      "rrhh-tareas.asignadas.revisar",
+      "rrhh-tareas.asignadas.cancelar",
+      "rrhh-tareas.asignadas.reasignar",
+      "pagina.rrhh-timbradas",
+      "pagina.rrhh-timbradas.marcar",
+      "pagina.rrhh-timbradas.equipo",
+      "rrhh-timbradas.equipo.exportar",
+      "pagina.rrhh-timbradas.horarios",
+      "rrhh-timbradas.horarios.editar",
+      "rrhh-timbradas.horarios.ajustes",
+      "pagina.dotaciones",
+      "pagina.dotaciones.entregas",
+      "dotaciones.entregas.registrar",
+      "pagina.dotaciones.productos",
+      "dotaciones.productos.gestionar",
+      "dotaciones.productos.ingreso",
+      "pagina.dotaciones.planes",
+      "dotaciones.planes.gestionar",
+      "pagina.perfil",
+      "pagina.sistema",
+      "sistema.sync.usar",
+      "datos.cedula.ver",
+      "datos.contacto.ver",
+      "rrhh.timbrada.obligatoria",
+      "rrhh-timbradas.marcar.obligatoria",
+      "pagina.usuarios",
+      "pagina.usuarios.usuarios",
+      "reportes.ver",
+      "reportes.excel",
+      "reportes.pdf",
+      "pagina.reportes"
+    ],
+    "acciones": {
+      "verTodasSucursales": true,
+      "crearSucursal": false,
+      "editarSucursal": false,
+      "crearUsuarios": false,
+      "asignarRoles": false,
+      "verOtrosSucursales": true,
+      "cambiarSucursalOperador": false,
+      "cambiarBahiaOperador": false,
+      "aprobarServicios": false,
+      "rechazarServicios": false,
+      "registrarServicio": false,
+      "verTodosServicios": false,
+      "verMaquinaria": false,
+      "gestionarMantenimiento": false,
       "registrarIncidente": false,
       "verReportes": true,
       "verProductividadGlobal": false,

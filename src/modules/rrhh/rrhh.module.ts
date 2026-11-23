@@ -12,6 +12,6 @@ import { UbicacionesService } from './ubicaciones.service.js';
   imports: [PrismaModule, StorageModule],
   controllers: [RrhhController],
   providers: [TimbradasService, TareasService, UbicacionesService, HorariosService, RrhhCronService],
-  exports: [TareasService],
+  exports: [TareasService, HorariosService],
 })
 export class RrhhModule {}

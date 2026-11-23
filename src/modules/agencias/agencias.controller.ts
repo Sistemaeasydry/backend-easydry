@@ -59,6 +59,7 @@ import {
   ListUsuariosAgenciaDto,
   ToggleEstadoUsuarioDto,
   UpdateUsuarioDto,
+  UpdateDatosPersonaDto,
   AsignarPasswordDto,
   CreateUsuarioDto,
   ListOperadoresDto,
@@ -401,6 +402,14 @@ export class AgenciasController {
   @ApiOperation({ summary: 'Usuarios para un desplegable con buscador: { value, label, sublabel } paginado' })
   async opcionesUsuarios(@Body() dto: UsuariosOpcionesDto, @CurrentUser() user: any) {
     return this.agenciasService.listUsuariosOpciones(dto, user);
+  }
+
+  @Permiso('usuarios.usuarios.datos')
+  @Post('usuarios/update-datos')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Editar solo los datos de la persona (nombres, cédula, celular, ciudad) dentro de su alcance' })
+  async updateDatosPersona(@Body() dto: UpdateDatosPersonaDto, @CurrentUser() user: any) {
+    return this.agenciasService.updateDatosPersona(dto, user);
   }
 
   @Permiso('usuarios.usuarios.estado')

@@ -7,8 +7,8 @@ import type { EditarAjusteDto, EditarHorarioDto } from './dto/rrhh.dto.js';
 import { diaComoFecha, fechaEnEcuador, personaEnAlcance, whereUsuariosEnAlcance } from './rrhh.reglas.js';
 import {
   AJUSTE_POR_DEFECTO,
-  HORARIO_POR_DEFECTO,
   aMinutos,
+  horarioPorDefectoDe,
   evaluarDia,
   indiceDiaSemana,
   sumarDias,
@@ -31,7 +31,8 @@ interface VersionAjuste { id: string; vigenteDesde: Date; toleranciaMin: number;
 export interface MarcaDia { userId: string; tipo: string; fechaDia: Date; marcadaEn: Date }
 export type FilaEvaluacion = EvaluacionDia & { userId: string; dia: string };
 
-const semanaDe = (v: { dias: unknown } | null | undefined): SemanaHorario => (v && Array.isArray(v.dias) ? (v.dias as SemanaHorario) : HORARIO_POR_DEFECTO);
+/** Semana de una versión; sin versión rige el horario por defecto que había ese día (`diaStr`, AAAA-MM-DD). */
+const semanaDe = (v: { dias: unknown } | null | undefined, diaStr: string): SemanaHorario => (v && Array.isArray(v.dias) ? (v.dias as SemanaHorario) : horarioPorDefectoDe(diaStr));
 const ajusteDe = (v: VersionAjuste | null): AjusteHorario | null => (v ? { toleranciaMin: v.toleranciaMin, ventanaMin: v.ventanaMin } : null);
 
 /**
@@ -60,7 +61,7 @@ export class HorariosService {
       this.prisma.horarioPersona.findMany({ where: { userId, vigenteDesde: { lte: diaComoFecha(diaStr) } } }),
       this.prisma.ajusteHorario.findMany({ where: { vigenteDesde: { lte: diaComoFecha(diaStr) } } }),
     ]);
-    const semana = semanaDe(versionVigente(versiones, diaStr));
+    const semana = semanaDe(versionVigente(versiones, diaStr), diaStr);
     return { dia: semana[indiceDiaSemana(diaStr)], ajuste: ajusteDe(versionVigente(ajustes, diaStr)) ?? AJUSTE_POR_DEFECTO };
   }
 
@@ -77,7 +78,7 @@ export class HorariosService {
    * Evalúa cada día del rango (hasta hoy) de cada persona con el horario y el ajuste que regían ese día. Si no se pasan las marcas, las busca.
    * Los días anteriores a que existan ajustes, o a que la persona existiera, quedan «sin horario».
    */
-  async evaluar(personas: Array<{ id: string; createdAt: Date }>, desde: Date, hasta: Date, marcas?: MarcaDia[], ahora = new Date()): Promise<FilaEvaluacion[]> {
+  async evaluar(personas: Array<{ id: string; createdAt: Date; obligatoria?: boolean }>, desde: Date, hasta: Date, marcas?: MarcaDia[], ahora = new Date()): Promise<FilaEvaluacion[]> {
     if (!personas.length) return [];
     const h = this.hoy(ahora);
     const ultimo = dia(hasta) > h.dia ? h.dia : dia(hasta);
@@ -104,7 +105,7 @@ export class HorariosService {
       const propias = versionesPorPersona.get(p.id) ?? [];
       for (let d = primero; d <= ultimo; d = sumarDias(d, 1)) {
         const ajuste = ajusteDe(versionVigente(ajustes as VersionAjuste[], d));
-        const semana = semanaDe(versionVigente(propias, d));
+        const semana = semanaDe(versionVigente(propias, d), d);
         const aplica = ajuste && d >= creada;
         filas.push({
           userId: p.id,
@@ -115,6 +116,7 @@ export class HorariosService {
             entradaMin: minutoDeMarca.get(`${p.id}|${d}|ENTRADA`) ?? null,
             salidaMin: minutoDeMarca.get(`${p.id}|${d}|SALIDA`) ?? null,
             ahoraMin: d === h.dia ? h.minuto : null,
+            obligatoria: p.obligatoria,
           }),
         });
       }
@@ -132,10 +134,10 @@ export class HorariosService {
     const futuras = versiones.filter((v) => dia(v.vigenteDesde) > h.dia);
     const proxima = versionVigente(futuras, '9999-12-31');
     return {
-      semana: semanaDe(vigente),
+      semana: semanaDe(vigente, h.dia),
       vigenteDesde: vigente ? dia(vigente.vigenteDesde) : null,
       porDefecto: !vigente,
-      proximoCambio: proxima ? { vigenteDesde: dia(proxima.vigenteDesde), semana: semanaDe(proxima) } : null,
+      proximoCambio: proxima ? { vigenteDesde: dia(proxima.vigenteDesde), semana: semanaDe(proxima, dia(proxima.vigenteDesde)) } : null,
     };
   }
 
@@ -156,7 +158,7 @@ export class HorariosService {
     const alcance = resolverAlcance(user);
     const personas = await this.prisma.user.findMany({
       where: { ...(whereUsuariosEnAlcance(alcance) as object), estado: 1, role: { capacidades: { has: 'rrhh.timbrar' } } },
-      select: { id: true, name: true, lastname: true, createdAt: true, role: { select: { namerol: true } } },
+      select: { id: true, name: true, lastname: true, createdAt: true, role: { select: { namerol: true, capacidades: true } } },
       orderBy: [{ name: 'asc' }, { lastname: 'asc' }],
     });
     const h = this.hoy();
@@ -172,9 +174,10 @@ export class HorariosService {
           id: p.id,
           nombre: apellidosNombres(p),
           rol: p.role?.namerol ?? '',
-          semana: semanaDe(vigente),
+          obligatoria: p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') ?? false,
+          semana: semanaDe(vigente, h.dia),
           porDefecto: !vigente,
-          proximoCambio: proxima ? { vigenteDesde: dia(proxima.vigenteDesde), semana: semanaDe(proxima) } : null,
+          proximoCambio: proxima ? { vigenteDesde: dia(proxima.vigenteDesde), semana: semanaDe(proxima, dia(proxima.vigenteDesde)) } : null,
         };
       }),
       ajuste: await this.ajusteVista(),
@@ -203,8 +206,9 @@ export class HorariosService {
         actor: actores.get(v.actorId) ?? v.actorId,
         vigenteDesde: dia(v.vigenteDesde),
         motivo: v.motivo,
-        dias: semanaDe(v),
-        anterior: i === 0 ? HORARIO_POR_DEFECTO : semanaDe(versiones[i - 1]),
+        dias: semanaDe(v, dia(v.vigenteDesde)),
+        // Lo que regía justo antes de esta versión: la versión anterior o, si es la primera, el horario por defecto de ese día.
+        anterior: i === 0 ? horarioPorDefectoDe(sumarDias(dia(v.vigenteDesde), -1)) : semanaDe(versiones[i - 1], dia(versiones[i - 1].vigenteDesde)),
       }))
       .reverse();
   }
@@ -302,7 +306,7 @@ export class HorariosService {
   async revisarIncidencias(ahora = new Date(), soloIds?: string[]): Promise<number> {
     const h = this.hoy(ahora);
     const personas = await this.prisma.user.findMany({
-      where: { estado: 1, role: { capacidades: { has: 'rrhh.timbrar' } }, ...(soloIds ? { id: { in: soloIds } } : {}) },
+      where: { estado: 1, role: { capacidades: { hasEvery: ['rrhh.timbrar', 'rrhh.timbrada.obligatoria'] } }, ...(soloIds ? { id: { in: soloIds } } : {}) },
       select: { id: true, name: true, lastname: true, createdAt: true },
     });
     if (!personas.length) return 0;
@@ -323,7 +327,7 @@ export class HorariosService {
     let avisadas = 0;
     for (const p of personas) {
       if (fechaEnEcuador(p.createdAt).dia > h.dia) continue;
-      const d = semanaDe(versionVigente((versiones as VersionHorario[]).filter((v) => v.userId === p.id), h.dia))[indiceDiaSemana(h.dia)];
+      const d = semanaDe(versionVigente((versiones as VersionHorario[]).filter((v) => v.userId === p.id), h.dia), h.dia)[indiceDiaSemana(h.dia)];
       if (!d.trabaja) continue;
       const tipos = porPersona.get(p.id) ?? new Set<string>();
       if (tipos.size === 0 && h.minuto > aMinutos(d.entrada) + ajuste.ventanaMin) {

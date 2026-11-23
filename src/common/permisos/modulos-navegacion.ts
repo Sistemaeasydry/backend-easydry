@@ -33,6 +33,7 @@ export const PERMISOS_POR_MODULO: Readonly<Record<string, readonly CodigoPermiso
   'rrhh/timbradas': ['rrhh.timbrar', 'rrhh.timbradas.ver'],
   'rrhh/dotaciones': ['dotaciones.ver'],
   usuarios: ['usuarios.gestionar', 'backup.gestionar', 'roles.ver', 'roles.gestionar'],
+  auditoria: ['auditoria.ver'],
   perfil: null,
 };
 

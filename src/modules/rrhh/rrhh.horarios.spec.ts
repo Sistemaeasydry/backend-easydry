@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   AJUSTE_POR_DEFECTO,
   HORARIO_POR_DEFECTO,
+  HORARIO_POR_DEFECTO_ANTERIOR,
+  HORARIO_POR_DEFECTO_DESDE,
   evaluarDia,
+  horarioPorDefectoDe,
   indiceDiaSemana,
   resolverMarca,
+  resolverMarcaVoluntaria,
   sumarDias,
   validarAjuste,
   validarSemana,
@@ -18,10 +22,32 @@ const DIA: DiaHorario = { trabaja: true, entrada: '08:00', salida: '15:00' };
 const NADA = { entrada: false, salida: false };
 
 describe('horario por defecto y validaciones', () => {
-  it('parte con 08:00 a 15:00 los siete días y es válido', () => {
+  it('parte con 08:00 a 17:00 los siete días y es válido', () => {
     expect(HORARIO_POR_DEFECTO).toHaveLength(7);
-    expect(HORARIO_POR_DEFECTO.every((d) => d.trabaja && d.entrada === '08:00' && d.salida === '15:00')).toBe(true);
+    expect(HORARIO_POR_DEFECTO.every((d) => d.trabaja && d.entrada === '08:00' && d.salida === '17:00')).toBe(true);
     expect(validarSemana(HORARIO_POR_DEFECTO)).toBeNull();
+  });
+
+  it('el 08:00 a 17:00 rige solo hacia adelante: los días anteriores a su fecha siguen con 08:00 a 15:00', () => {
+    expect(horarioPorDefectoDe(HORARIO_POR_DEFECTO_DESDE)).toBe(HORARIO_POR_DEFECTO);
+    expect(horarioPorDefectoDe('2031-03-10')).toBe(HORARIO_POR_DEFECTO);
+    expect(horarioPorDefectoDe('2026-11-23')).toBe(HORARIO_POR_DEFECTO_ANTERIOR);
+    expect(HORARIO_POR_DEFECTO_ANTERIOR.every((d) => d.entrada === '08:00' && d.salida === '15:00')).toBe(true);
+  });
+
+  it('quien no está obligado a timbrar marca sin ventana: la primera es Entrada, la segunda Salida y no hay una tercera', () => {
+    expect(resolverMarcaVoluntaria(NADA)).toEqual({ ok: true, tipo: 'ENTRADA' });
+    expect(resolverMarcaVoluntaria({ entrada: true, salida: false })).toEqual({ ok: true, tipo: 'SALIDA' });
+    expect(resolverMarcaVoluntaria({ entrada: true, salida: true })).toMatchObject({ ok: false, motivo: 'YA_REGISTRADA' });
+  });
+
+  it('un día sin marcas de quien no está obligado sale «No obligatorio»; con marcas, solo se indica si entró antes del horario', () => {
+    const sin = evaluarDia({ dia: DIA, ajuste: AJUSTE_POR_DEFECTO, entradaMin: null, salidaMin: null, obligatoria: false });
+    expect(sin).toMatchObject({ estado: 'NO_OBLIGATORIO', observaciones: [] });
+    const antes = evaluarDia({ dia: DIA, ajuste: AJUSTE_POR_DEFECTO, entradaMin: h('07:10'), salidaMin: h('16:00'), obligatoria: false });
+    expect(antes).toMatchObject({ estado: 'REGISTRADO', observaciones: ['ENTRADA_TEMPRANA'], entradaReal: '07:10', minutosEntrada: -50 });
+    const tarde = evaluarDia({ dia: DIA, ajuste: AJUSTE_POR_DEFECTO, entradaMin: h('09:30'), salidaMin: null, obligatoria: false });
+    expect(tarde).toMatchObject({ estado: 'REGISTRADO', observaciones: [], minutosEntrada: 90 });
   });
 
   it('rechaza semanas incompletas, horas mal escritas y turnos que cruzan la medianoche', () => {

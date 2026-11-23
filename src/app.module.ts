@@ -27,6 +27,7 @@ import { PermisosGuard } from './common/permisos/permisos.guard.js';
 import { DeviceThrottlerGuard } from './common/guards/throttler-behind-proxy.guard.js';
 import { RetosModule } from './modules/retos/retos.module.js';
 import { AuditoriasModule } from './modules/auditorias/auditorias.module.js';
+import { AuditoriaModule } from './modules/auditoria/auditoria.module.js';
 import { ReportesModule } from './modules/reportes/reportes.module.js';
 import { ArchivadoModule } from './modules/archivado/archivado.module.js';
 import { RrhhModule } from './modules/rrhh/rrhh.module.js';
@@ -71,6 +72,7 @@ import { DotacionesModule } from './modules/dotaciones/dotaciones.module.js';
     AprobacionesModule,
     RetosModule,
     AuditoriasModule,
+    AuditoriaModule,
     ReportesModule,
     ArchivadoModule,
     RrhhModule,

@@ -161,6 +161,46 @@ export class AsignarPasswordDto {
   password: string;
 }
 
+/** Datos de la persona que edita Talento Humano: nunca contraseña, rol, estado ni agencia. */
+export class UpdateDatosPersonaDto {
+  @ApiProperty({ example: 'uuid-usuario', description: 'ID del usuario a actualizar' })
+  @IsString()
+  @IsNotEmpty({ message: 'El ID de usuario es obligatorio' })
+  id: string;
+
+  @ApiPropertyOptional({ example: 'Carlos' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre no puede quedar vacío' })
+  @MaxLength(80)
+  name?: string;
+
+  @ApiPropertyOptional({ example: 'Mendoza' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'El apellido no puede quedar vacío' })
+  @MaxLength(80)
+  lastname?: string;
+
+  @ApiPropertyOptional({ example: '0991234567', description: 'Celular de 10 dígitos (09XXXXXXXX). Vacío lo quita.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  telefono?: string;
+
+  @ApiPropertyOptional({ example: '1723456789', description: 'Cédula de 10 dígitos. Única. Vacío la quita.' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(\d{10})?$/, { message: 'La cédula debe tener 10 dígitos' })
+  cedula?: string;
+
+  @ApiPropertyOptional({ example: 'Quito', description: 'Ciudad de la persona. Vacío la quita.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  ciudad?: string;
+}
+
 export class UpdateUsuarioDto {
   @ApiProperty({ example: 'uuid-usuario', description: 'ID del usuario a actualizar' })
   @IsString()

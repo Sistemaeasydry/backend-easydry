@@ -12,7 +12,7 @@ import { abrirEntorno, type Entorno } from '../../../test/integracion/entorno.js
 const QUITO = { latitud: -0.1807, longitud: -78.4678 };
 const M = 1 / 111_320;
 const aMetros = (m: number) => ({ latitud: QUITO.latitud + m * M, longitud: QUITO.longitud });
-/** 08:30 y 15:30 en Ecuador (UTC-5), un lunes fijo y lejano. Con el horario por defecto (08:00 a 15:00) y la ventana de 2 h, ambas hacen marca. */
+/** 08:30 y 15:30 en Ecuador (UTC-5), un lunes fijo y lejano. Con el horario por defecto (08:00 a 17:00) y la ventana de 2 h, ambas hacen marca (la salida se marca de 15:00 a 19:00). */
 const OCHO_Y_MEDIA = new Date('2031-03-10T13:30:00Z');
 const TRES_Y_MEDIA = new Date('2031-03-10T20:30:00Z');
 let fotos = 0;
@@ -67,6 +67,11 @@ describe('TimbradasService (base real)', () => {
     await crear('admin', 'ADMIN');
     await crear('superAdmin', 'SUPER_ADMIN');
     for (const clave of Object.keys(ids)) actores[clave] = await env.actor(ids[clave]);
+    // Las casillas de timbrada las trae el rol: la base local aún no las tiene, así que se fijan aquí. ADMIN y SUPER_ADMIN timban sin obligación.
+    for (const clave of Object.keys(actores)) {
+      const voluntaria = ['admin', 'superAdmin'].includes(clave);
+      actores[clave].roleDetails = { ...actores[clave].roleDetails, capacidades: voluntaria ? ['rrhh.timbrar'] : ['rrhh.timbrar', 'rrhh.timbrada.obligatoria'] };
+    }
     vi.useFakeTimers({ toFake: ['Date'] });
   });
 
@@ -157,16 +162,20 @@ describe('TimbradasService (base real)', () => {
     expect(aviso.titulo).toBe('Falta la ubicación de un sitio');
   });
 
-  it('el personal de bodega se valida contra la ubicación y el radio de su bodega', async () => {
+  it('el personal de bodega (administración) timba en su bodega y también en cualquier agencia con ubicación', async () => {
     a(OCHO_Y_MEDIA);
     const enBodega = { latitud: QUITO.latitud - 0.1, longitud: QUITO.longitud };
     const r = await marcar('asistente', { ...enBodega, precisionM: 10 });
     expect(r).toMatchObject({ verificacion: 'VERIFICADA', radioM: 100, sitio: { tipo: 'BODEGA', nombre: bodega.nombre } });
     const fila = await env.prisma.timbrada.findUniqueOrThrow({ where: { id: r.id } });
     expect(fila).toMatchObject({ bodegaId: bodega.id, agenciaId: null });
-    // en la agencia, que no es su sitio, no vale
+    // al ser de administración, en una agencia con ubicación también vale
     a(TRES_Y_MEDIA);
-    await expect(marcar('asistente', { ...QUITO, precisionM: 10 })).rejects.toMatchObject({ response: { codigo: 'LEJOS' } });
+    const enAgencia = await marcar('asistente', { ...QUITO, precisionM: 10 });
+    expect(enAgencia).toMatchObject({ tipo: 'SALIDA', sitio: { tipo: 'AGENCIA' } });
+    // y lejos de todos los sitios no vale
+    a(new Date('2031-03-11T20:30:00Z'));
+    await expect(marcar('asistente', { latitud: QUITO.latitud + 1, longitud: QUITO.longitud, precisionM: 10 })).rejects.toMatchObject({ response: { codigo: 'LEJOS' } });
   });
 
   it('quien no tiene agencia asignada no puede timbrar', async () => {
@@ -202,23 +211,34 @@ describe('TimbradasService (base real)', () => {
     }
   });
 
-  it('ADMIN y SUPER_ADMIN no timbran', async () => {
-    await expect(marcar('admin')).rejects.toThrow('Los administradores no timbran.');
-    await expect(marcar('superAdmin')).rejects.toThrow('Los administradores no timbran.');
-    await expect(service.estado(actores.admin)).rejects.toThrow('Los administradores no timbran.');
+  it('ADMIN y SUPER_ADMIN timban sin obligación: sin ventana, la primera marca es Entrada y la segunda Salida', async () => {
+    a(new Date('2031-03-12T16:30:00Z')); // 11:30: fuera de toda ventana, pero para quien no está obligado no hay ventana
+    const estado = await service.estado(actores.admin);
+    expect(estado).toMatchObject({ obligatoria: false, ventanas: null, tipoActual: 'ENTRADA', puedeTimbrar: true });
+    expect(await marcar('admin')).toMatchObject({ tipo: 'ENTRADA', verificacion: 'VERIFICADA' });
+    a(new Date('2031-03-12T20:30:00Z'));
+    expect(await marcar('admin')).toMatchObject({ tipo: 'SALIDA' });
+    await expect(marcar('admin')).rejects.toThrow('Ya registraste tu entrada y tu salida de hoy.');
+    expect(await service.estado(actores.lavador)).toMatchObject({ obligatoria: true });
+    // Su día queda «Registrado»: solo la hora de las marcas y los minutos respecto a su horario, sin atraso ni alertas.
+    const mias = await service.mias({ desde: '2031-03-12', hasta: '2031-03-12' }, actores.admin);
+    expect(mias.evaluacion).toEqual([expect.objectContaining({ dia: '2031-03-12', estado: 'REGISTRADO', entradaReal: '11:30', salidaReal: '15:30', minutosEntrada: 210 })]);
+    // Sin marcas, el día aparece como «No obligatorio timbrar».
+    const sinMarcas = await service.mias({ desde: '2031-03-13', hasta: '2031-03-13' }, actores.superAdmin);
+    expect(sinMarcas.evaluacion).toEqual([expect.objectContaining({ dia: '2031-03-13', estado: 'NO_OBLIGATORIO' })]);
   });
 
   it('estado: la hora del servidor, lo marcado hoy y si hay que mandar ubicación', async () => {
     a(TRES_Y_MEDIA);
     const conUbicacion = await service.estado(actores.lavador);
     // el lavador ya marcó su entrada y su salida: hoy no le queda otra marca
-    expect(conUbicacion).toMatchObject({ dia: '2031-03-10', tipoActual: null, puedeTimbrar: false, exigeUbicacion: true, precisionMaxM: 120, toleranciaMin: 10, ventanaMin: 120, horario: { trabaja: true, entrada: '08:00', salida: '15:00' } });
-    expect(conUbicacion.ventanas).toEqual({ entrada: { desde: '06:00', hasta: '10:00' }, salida: { desde: '13:00', hasta: '17:00' } });
+    expect(conUbicacion).toMatchObject({ dia: '2031-03-10', tipoActual: null, puedeTimbrar: false, exigeUbicacion: true, precisionMaxM: 120, toleranciaMin: 10, ventanaMin: 120, horario: { trabaja: true, entrada: '08:00', salida: '17:00' } });
+    expect(conUbicacion.ventanas).toEqual({ entrada: { desde: '06:00', hasta: '10:00' }, salida: { desde: '15:00', hasta: '19:00' } });
     expect(await service.estado(actores.lavador2)).toMatchObject({ tipoActual: 'SALIDA', puedeTimbrar: true });
     expect(conUbicacion.marcasHoy.map((m) => m.tipo)).toEqual(['ENTRADA', 'SALIDA']);
     expect(conUbicacion.sitios).toEqual([{ tipo: 'AGENCIA', nombre: agencia.nombre, radioM: 100, tieneUbicacion: true }]);
     expect(conUbicacion.modo).toBe('AGENCIA_ASIGNADA');
-    expect(await service.estado(actores.asistente)).toMatchObject({ modo: 'BODEGA', exigeUbicacion: true });
+    expect(await service.estado(actores.asistente)).toMatchObject({ modo: 'CUALQUIER_AGENCIA', exigeUbicacion: true });
     expect(await service.estado(actores.tecnico, 'WEB')).toMatchObject({ modo: 'CUALQUIER_AGENCIA', exigeUbicacion: true, radioM: 100, sitios: [] });
     // sin una agencia o bodega con ubicación contra la cual validar, hoy no puede timbrar
     expect(await service.estado(actores.lavadorSinUb)).toMatchObject({ puedeTimbrar: false, motivoBloqueo: expect.stringContaining('ubicación configurada') });
@@ -263,7 +283,7 @@ describe('TimbradasService (base real)', () => {
   it('fuera de las ventanas del horario no se deja timbrar y el mensaje dice cuáles son', async () => {
     a(new Date('2031-03-10T16:30:00Z')); // 11:30
     await expect(marcar('lider')).rejects.toMatchObject({ response: { codigo: 'FUERA_DE_VENTANA', message: expect.stringContaining('06:00 a 10:00') } });
-    a(new Date('2031-03-10T22:30:00Z')); // 17:30: pasó la ventana de la salida
+    a(new Date('2031-03-11T00:30:00Z')); // 19:30: pasó la ventana de la salida
     await expect(marcar('lider')).rejects.toMatchObject({ response: { codigo: 'FUERA_DE_VENTANA' } });
     expect(await env.prisma.timbrada.count({ where: { userId: ids.lider } })).toBe(0);
     expect(await service.estado(actores.lider)).toMatchObject({ puedeTimbrar: false, tipoActual: null });
@@ -307,11 +327,11 @@ describe('TimbradasService (base real)', () => {
     expect(mias.evaluacion).toEqual([expect.objectContaining({ dia: '2031-03-10', estado: 'INCOMPLETO', entradaReal: null, salidaReal: '15:30', horasReales: null })]);
   });
 
-  it('la evaluación del día compara las marcas con el horario: atraso, salida tardía y las dos cifras de horas', async () => {
+  it('la evaluación del día compara las marcas con el horario: atraso, salida anticipada y las dos cifras de horas', async () => {
     a(TRES_Y_MEDIA);
     const r = await service.mias({ desde: '2031-03-09', hasta: '2031-03-10' }, actores.lavador);
     expect(r.evaluacion.map((e) => [e.dia, e.estado])).toEqual([['2031-03-09', 'SIN_MARCA'], ['2031-03-10', 'ATRASO']]);
-    expect(r.evaluacion[1]).toMatchObject({ observaciones: ['ATRASO', 'SALIDA_TARDIA'], entradaReal: '08:30', salidaReal: '15:30', minutosEntrada: 30, minutosSalida: 30, horasReales: 7, horasDentroHorario: 6.5 });
+    expect(r.evaluacion[1]).toMatchObject({ observaciones: ['ATRASO', 'SALIDA_ANTICIPADA'], entradaReal: '08:30', salidaReal: '15:30', minutosEntrada: 30, minutosSalida: -90, horasReales: 7, horasDentroHorario: 7 });
   });
 
   it('un día anterior a los ajustes no se evalúa', async () => {

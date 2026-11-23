@@ -5,6 +5,8 @@
  * Si algún día un endpoint pasa a exigirla, se borra de aquí.
  */
 export const EXCEPCIONES_SERVIDOR: Record<string, string> = {
+  'rrhh-timbradas.marcar.obligatoria':
+    "Es una condición, no una operación: el servicio de timbradas y el de horarios la leen del rol para decidir si evalúan el horario, aplican la ventana y avisan de marcas faltantes; no hay endpoint propio que exigir.",
   'rrhh-timbradas.equipo.exportar':
     "El Excel y el PDF se arman en la pantalla con las timbradas que ya devolvió timbradas/equipo (que exige 'rrhh.timbradas.ver'); no hay un endpoint de exportación que exigir. Se oculta el botón.",
   'dashboard.alertas.ver':
@@ -43,6 +45,7 @@ export const EXCEPCIONES_SERVIDOR: Record<string, string> = {
 const FUNCION_MOTIVO = 'Función del rol: la leen el servidor (alcance, avisos, asignaciones) y la sesión; ninguna pantalla muestra un botón por ella.';
 
 export const EXCEPCIONES_PANTALLA: Record<string, string> = {
+  'rrhh-timbradas.marcar.obligatoria': 'El servidor decide qué se evalúa y avisa según esta casilla y la respuesta de timbradas/estado trae el dato «obligatoria»: la pantalla muestra lo que llega, sin consultarla.',
   'precios.ver': 'El servidor retira los precios de la respuesta (interceptor) a quien no tiene esta casilla: la pantalla muestra lo que llega, sin consultarla.',
   'datos.cedula.ver': 'El servidor omite la cédula del personal en la respuesta si falta la casilla: la pantalla muestra lo que llega.',
   'datos.contacto.ver': 'El servidor omite correo y teléfono del personal en la respuesta si falta la casilla: la pantalla muestra lo que llega.',

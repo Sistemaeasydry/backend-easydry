@@ -1,5 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { HorariosService } from '../rrhh/horarios.service.js';
+import { diaComoFecha, whereUsuariosEnAlcance } from '../rrhh/rrhh.reglas.js';
 import { resolverAlcance, whereAgencias, type Alcance } from '../../common/permisos/alcance.js';
 import { rolDeUsuario } from '../../common/permisos/alias-roles.js';
 import { FUNCION, rolConFuncion, tieneFuncion } from '../../common/permisos/funciones.js';
@@ -95,6 +98,14 @@ interface Ctx {
 
 const nombreDe = (u?: { name?: string | null; lastname?: string | null } | null): string => (u ? apellidosNombres(u) : '');
 const titulo = (s?: string | null): string => (s ? `${s.charAt(0).toUpperCase()}${s.slice(1).toLowerCase().replace(/_/g, ' ')}` : '');
+/** Tope de filas persona-día del reporte de timbradas, para que un periodo muy largo no tumbe el servidor. */
+const LIMITE_PERSONA_DIA = 60_000;
+/** Cómo se llama cada estado del día en el reporte de timbradas. */
+const ESTADO_DIA_RRHH: Record<string, string> = {
+  CUMPLE: 'Cumple', ATRASO: 'Atraso', ENTRADA_TEMPRANA: 'Entrada temprana', SALIDA_ANTICIPADA: 'Salida anticipada', SALIDA_TARDIA: 'Salida tardía',
+  INCOMPLETO: 'Incompleto', SIN_MARCA: 'Sin marca', DIA_LIBRE: 'Día libre', PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', SIN_HORARIO: 'Sin horario',
+  NO_OBLIGATORIO: 'No obligatorio timbrar', REGISTRADO: 'Registrado',
+};
 /** Reportes que puede sacar el aprobador: solo los de sus servicios. */
 const REPORTES_DEL_APROBADOR = ['servicios-lavado'];
 
@@ -132,6 +143,8 @@ export class ReportesService {
     @Optional() private readonly archivo?: ReportesArchivoService,
     /** Guarda unos minutos las opciones de filtro (catálogo, casi no cambia). Sin él, cada apertura de Reportes recalcula todo. */
     @Optional() private readonly cache?: CacheService,
+    /** Evalúa el cumplimiento de horario del reporte de timbradas. Sin él, ese reporte sale vacío. */
+    @Optional() private readonly horarios?: HorariosService,
   ) {}
 
   // ---------------------------------------------------------------------------------------------------------------------
@@ -408,6 +421,9 @@ export class ReportesService {
       case 'productividad-operarios': return this.productividadOperarios(ctx);
       case 'informes-inspeccion': return this.informes(ctx);
       case 'auditorias-5s': return this.auditorias5s(ctx);
+      case 'rrhh-timbradas': return this.rrhhTimbradas(ctx);
+      case 'rrhh-dotaciones-entregas': return this.dotacionesEntregas(ctx);
+      case 'rrhh-dotaciones-stock': return this.dotacionesStock(ctx);
       default: throw new NotFoundException('El reporte no existe.');
     }
   }
@@ -1363,6 +1379,118 @@ export class ReportesService {
       };
     });
   }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Talento Humano y dotaciones
+  // ---------------------------------------------------------------------------------------------------------------------
+
+  /** Personas dentro del alcance; con filtro de agencia o cliente, solo las de esas agencias. */
+  private personasEnAlcance(ctx: Ctx): Prisma.UserWhereInput {
+    return { AND: [whereUsuariosEnAlcance(ctx.alcance) as Prisma.UserWhereInput, ctx.incluyeBodegas ? {} : { agenciaId: { in: ctx.ids } }] };
+  }
+
+  private async rrhhTimbradas(ctx: Ctx): Promise<Bruta[]> {
+    if (!this.horarios || !ctx.rango) return [];
+    const personas = await this.prisma.user.findMany({
+      where: { ...this.personasEnAlcance(ctx), estado: 1 },
+      select: { id: true, name: true, lastname: true, createdAt: true, role: { select: { namerol: true, capacidades: true } }, agencia: { select: { nombre: true } }, bodega: { select: { nombre: true } } },
+    });
+    if (!personas.length) return [];
+    const desde = diaComoFecha(ctx.rango.desde);
+    const hasta = diaComoFecha(ctx.rango.hasta);
+    const dias = Math.round((hasta.getTime() - desde.getTime()) / 86_400_000) + 1;
+    if (personas.length * dias > LIMITE_PERSONA_DIA) throw new BadRequestException('El periodo es demasiado largo para tanto personal: elige menos días o filtra por agencia.');
+
+    const marcas = await this.prisma.timbrada.findMany({
+      where: { userId: { in: personas.map((p) => p.id) }, fechaDia: { gte: desde, lte: hasta } },
+      select: { userId: true, tipo: true, fechaDia: true, marcadaEn: true, agenciaId: true, bodegaId: true },
+      orderBy: { marcadaEn: 'asc' },
+    });
+    const sitioIds = unicos(marcas.flatMap((m) => [m.agenciaId, m.bodegaId]));
+    const [agenciasSitio, bodegasSitio] = await Promise.all([
+      this.prisma.agencia.findMany({ where: { id: { in: sitioIds } }, select: { id: true, nombre: true } }),
+      this.prisma.bodega.findMany({ where: { id: { in: sitioIds } }, select: { id: true, nombre: true } }),
+    ]);
+    const nombreSitio = new Map<string, string>([...agenciasSitio, ...bodegasSitio].map((s) => [s.id, s.nombre]));
+    const sitioDelDia = new Map<string, string>();
+    for (const m of marcas) {
+      const clave = `${m.userId}|${m.fechaDia.toISOString().slice(0, 10)}`;
+      const sitio = nombreSitio.get(m.agenciaId ?? m.bodegaId ?? '') ?? '';
+      if (sitio && !sitioDelDia.has(clave)) sitioDelDia.set(clave, sitio);
+    }
+
+    const evaluacion = await this.horarios.evaluar(
+      personas.map((p) => ({ id: p.id, createdAt: p.createdAt, obligatoria: !!p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') })),
+      desde,
+      hasta,
+      marcas,
+    );
+    const porId = new Map(personas.map((p) => [p.id, p]));
+    return evaluacion
+      // Los días anteriores a los horarios o libres sin marcas no aportan nada al reporte.
+      .filter((e) => e.estado !== 'SIN_HORARIO' && !(e.estado === 'DIA_LIBRE' && !e.entradaReal && !e.salidaReal))
+      .map((e) => {
+        const p = porId.get(e.userId)!;
+        return {
+          grupo: 'unico',
+          fecha: e.dia,
+          fila: {
+            fecha: e.dia,
+            persona: nombreDe(p),
+            rol: titulo(p.role?.namerol),
+            agencia: p.agencia?.nombre ?? p.bodega?.nombre ?? '',
+            entrada: e.entradaReal ?? '',
+            salida: e.salidaReal ?? '',
+            sitio: sitioDelDia.get(`${e.userId}|${e.dia}`) ?? '',
+            estado: ESTADO_DIA_RRHH[e.estado] ?? e.estado,
+            minutosEntrada: e.minutosEntrada,
+            horas: e.horasReales,
+            horasHorario: e.horasDentroHorario,
+          },
+        };
+      })
+      .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : String(a.fila.persona).localeCompare(String(b.fila.persona), 'es')));
+  }
+
+  private async dotacionesEntregas(ctx: Ctx): Promise<Bruta[]> {
+    if (!ctx.rango) return [];
+    const entregas = await this.prisma.entregaDotacion.findMany({
+      where: {
+        fechaProgramada: { gte: diaComoFecha(ctx.rango.desde), lte: diaComoFecha(ctx.rango.hasta) },
+        ...(ctx.dto.estado ? { estado: ctx.dto.estado } : {}),
+        persona: this.personasEnAlcance(ctx),
+      },
+      include: {
+        plan: { select: { nombre: true } },
+        persona: { select: { name: true, lastname: true, role: { select: { namerol: true } }, agencia: { select: { nombre: true } }, bodega: { select: { nombre: true } } } },
+        items: { include: { producto: { select: { nombre: true } } } },
+      },
+      orderBy: { fechaProgramada: 'asc' },
+    });
+    const entregadores = await this.prisma.user.findMany({ where: { id: { in: unicos(entregas.map((e) => e.entregadaPorId)) } }, select: { id: true, name: true, lastname: true } });
+    const nombreEntregador = new Map(entregadores.map((u) => [u.id, nombreDe(u)]));
+    return entregas.map((e) => ({
+      grupo: 'unico',
+      fecha: e.fechaProgramada.toISOString().slice(0, 10),
+      fila: {
+        fecha: e.fechaProgramada.toISOString().slice(0, 10),
+        persona: nombreDe(e.persona),
+        rol: titulo(e.persona.role?.namerol),
+        agencia: e.persona.agencia?.nombre ?? e.persona.bodega?.nombre ?? '',
+        plan: e.plan.nombre,
+        productos: e.items.map((i) => `${i.producto.nombre} x${i.cantidadEntregada ?? i.cantidadPlan}`).join(', '),
+        estado: titulo(e.estado),
+        entregadaEn: e.entregadaEn ? fechaEcuador(e.entregadaEn) : '',
+        entregadaPor: e.entregadaPorId ? (nombreEntregador.get(e.entregadaPorId) ?? '') : '',
+      },
+    }));
+  }
+
+  private async dotacionesStock(_ctx: Ctx): Promise<Bruta[]> {
+    const productos = await this.prisma.productoDotacion.findMany({ include: { categoria: { select: { nombre: true } } }, orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }] });
+    return productos.map((p) => ({ grupo: 'unico', fila: { categoria: p.categoria.nombre, producto: p.nombre, stock: p.stock, estado: p.activo ? 'Activo' : 'Inactivo' } }));
+  }
+
 
   // ---------------------------------------------------------------------------------------------------------------------
   // Bitácora de exportaciones

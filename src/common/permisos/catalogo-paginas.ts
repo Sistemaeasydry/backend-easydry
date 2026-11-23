@@ -347,7 +347,10 @@ export const PAGINAS: readonly PaginaDef[] = [
   ]),
 
   pagina('rrhh-timbradas', 'Timbradas', '/rrhh/timbradas', 'rrhh/timbradas', [], [
-    sub('rrhh-timbradas', 'marcar', 'Timbrar', ['rrhh.timbrar'], []),
+    sub('rrhh-timbradas', 'marcar', 'Timbrar', ['rrhh.timbrar'], [
+      // Se otorga aparte de `rrhh.timbrar`: sin esta casilla timbrar es voluntario (sin ventana, evaluación ni avisos).
+      accion('rrhh-timbradas.marcar.obligatoria', 'Timbrada obligatoria (se evalúa su horario y se avisa si falta)', ['rrhh.timbrada.obligatoria'], { migrarSi: ['rrhh.timbrada.obligatoria'] }),
+    ]),
     sub('rrhh-timbradas', 'equipo', 'Timbradas del equipo', ['rrhh.timbradas.ver'], [
       // La exportación se arma en la pantalla con lo que ya se ve: quien ve el equipo la conserva.
       accion('rrhh-timbradas.equipo.exportar', 'Exportar timbradas a Excel o PDF', [], { migrarSi: ['rrhh.timbradas.ver'] }),
@@ -373,11 +376,19 @@ export const PAGINAS: readonly PaginaDef[] = [
     ]),
   ]),
 
+  // Auditoría: quién hizo qué y cuándo. Cada rol ve solo las pantallas que tiene activas y los cambios de su alcance.
+  pagina('auditoria', 'Auditoría', '/auditoria', 'auditoria', ['auditoria.ver'], [], [
+    accion('auditoria.exportar', 'Exportar la auditoría a Excel o PDF', ['auditoria.exportar'], { migrarSi: ['auditoria.exportar'] }),
+    accion('auditoria.bitacora', 'Ver quién consultó la auditoría', ['auditoria.bitacora'], { migrarSi: ['auditoria.bitacora'] }),
+  ]),
+
   pagina('usuarios', 'Usuarios y Roles', '/usuarios', 'usuarios', [], [
     sub('usuarios', 'usuarios', 'Usuarios', ['usuarios.ver', 'agencias.ver'], [
       accion('usuarios.usuarios.crear', 'Crear usuario', ['usuarios.gestionar']),
       accion('usuarios.usuarios.editar', 'Editar usuario', ['usuarios.gestionar']),
       accion('usuarios.usuarios.estado', 'Activar o desactivar usuario', ['usuarios.gestionar']),
+      // Solo los datos de la persona (RRHH): sin contraseña, rol, estado ni agencia. Cada cambio queda en la auditoría.
+      accion('usuarios.usuarios.datos', 'Editar los datos de la persona (nombres, cédula, celular, ciudad)', ['usuarios.datos.editar'], { migrarSi: ['usuarios.datos.editar'] }),
       accion('usuarios.usuarios.password', 'Asignar y restablecer contraseñas', []),
       accion('usuarios.usuarios.backup', 'Gestionar usuarios Backup', ['backup.gestionar']),
       CEDULA, CONTACTO,

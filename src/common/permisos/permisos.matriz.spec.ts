@@ -24,7 +24,8 @@ const usuario = (namerol: string) => {
 };
 
 /** ADMIN y SUPER_ADMIN no timbran ni reciben tareas. */
-const NO_TIMBRAN: string[] = ['rrhh.timbrar', 'rrhh.tareas.propias'];
+// Lo que los administradores no tienen: recibir tareas y estar obligados a timbrar (timbrar sí pueden, voluntariamente).
+const NO_TIMBRAN: string[] = ['rrhh.timbrada.obligatoria', 'rrhh.tareas.propias'];
 
 describe('catálogo de permisos', () => {
   it('no repite códigos y todos siguen el formato modulo.accion', () => {
@@ -33,9 +34,9 @@ describe('catálogo de permisos', () => {
       expect(p.codigo).toMatch(/^[a-z]+(\.[a-z]+)+$/);
   });
 
-  it('los 16 roles oficiales existen, sin repetir, con ámbito válido y solo permisos del catálogo', () => {
-    expect(ROLES_BASE).toHaveLength(16);
-    expect(new Set(ROLES_BASE.map((r) => r.namerol)).size).toBe(16);
+  it('los 17 roles oficiales existen, sin repetir, con ámbito válido y solo permisos del catálogo', () => {
+    expect(ROLES_BASE).toHaveLength(17);
+    expect(new Set(ROLES_BASE.map((r) => r.namerol)).size).toBe(17);
     for (const r of ROLES_BASE) {
       expect(AMBITOS).toContain(r.ambito);
       for (const c of r.capacidades) expect(esCodigoPermiso(c), `${r.namerol}: ${c} fuera del catálogo`).toBe(true);
@@ -65,26 +66,29 @@ describe('matriz acordada de permisos por rol', () => {
     expect(rolesCon('roles.gestionar')).toEqual(['SUPER_ADMIN']);
   });
 
-  it('el lavador no opera la plataforma: solo ve sus resultados de auditoría, timbra y recibe tareas', () => {
+  it('el lavador no opera la plataforma: solo ve sus resultados de auditoría, timbra (obligatoria) y recibe tareas', () => {
     const permisos = CODIGOS_PERMISOS.filter((c) => tienePermiso(usuario('LAVADOR'), c));
-    expect(permisos.sort()).toEqual(['informes.ver', 'inspecciones.ver', 'rrhh.tareas.propias', 'rrhh.timbrar']);
+    expect(permisos.sort()).toEqual(['informes.ver', 'inspecciones.ver', 'rrhh.tareas.propias', 'rrhh.timbrada.obligatoria', 'rrhh.timbrar']);
   });
 
   it('RRHH: todos timbran y reciben tareas menos ADMIN y SUPER_ADMIN; asignan solo los acordados; las ubicaciones, solo los administradores', () => {
     const todos = ROLES_BASE.map((r) => r.namerol);
-    expect(rolesCon('rrhh.timbrar').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN'].includes(n)).sort());
-    expect(rolesCon('rrhh.tareas.propias').sort()).toEqual(rolesCon('rrhh.timbrar').sort());
-    const asignan = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'LIDER', 'BACKUP', 'AUXILIAR'].sort();
+    // Todos pueden timbrar. La timbrada solo es obligatoria para quien tiene `rrhh.timbrada.obligatoria`: no la tienen ADMIN, SUPER_ADMIN ni APROBADOR.
+    expect(rolesCon('rrhh.timbrar').sort()).toEqual([...todos].sort());
+    expect(rolesCon('rrhh.timbrada.obligatoria').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN', 'APROBADOR'].includes(n)).sort());
+    expect(rolesCon('rrhh.tareas.propias').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN'].includes(n)).sort());
+    const asignan = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'TALENTO_HUMANO', 'AUXILIAR'].sort();
     expect(rolesCon('rrhh.tareas.asignar').sort()).toEqual(asignan);
-    expect(rolesCon('rrhh.timbradas.ver').sort()).toEqual(asignan);
-    expect(rolesCon('rrhh.ubicaciones.gestionar').sort()).toEqual(['ADMIN', 'SUPER_ADMIN']);
-    expect(rolesCon('rrhh.horarios.gestionar').sort()).toEqual(['ADMIN', 'SUPER_ADMIN']);
+    // El personal operativo (lavador, pulidor, líder y backup) solo recibe tareas; el líder y el backup sí ven las timbradas de su agencia.
+    expect(rolesCon('rrhh.timbradas.ver').sort()).toEqual([...asignan, 'LIDER', 'BACKUP'].sort());
+    expect(rolesCon('rrhh.ubicaciones.gestionar').sort()).toEqual(['ADMIN', 'SUPER_ADMIN', 'TALENTO_HUMANO']);
+    expect(rolesCon('rrhh.horarios.gestionar').sort()).toEqual(['ADMIN', 'SUPER_ADMIN', 'TALENTO_HUMANO']);
   });
 
   it('auditar (hacer informes de inspección y auditorías 5S) lo pueden todos los roles menos líder, Backup, auxiliar, lavador y pulidor', () => {
     const noAudita = ['AUXILIAR', 'BACKUP', 'LAVADOR', 'LIDER', 'PULIDOR'];
     // El aprobador solo aprueba servicios: no tiene informes ni auditorías 5S.
-    const auditan = ROLES_BASE.map((r) => r.namerol).filter((n) => !noAudita.includes(n) && n !== 'APROBADOR').sort();
+    const auditan = ROLES_BASE.map((r) => r.namerol).filter((n) => !noAudita.includes(n) && n !== 'APROBADOR' && n !== 'TALENTO_HUMANO').sort();
     const caps0 = ROLES_BASE.find((r) => r.namerol === 'APROBADOR')!.capacidades;
     expect(caps0.filter((c) => /^(informes|inspecciones|auditorias)\./.test(c))).toEqual([]);
     expect(rolesCon('informes.crear')).toEqual(auditan);
@@ -358,7 +362,7 @@ describe('matriz acordada de permisos por rol', () => {
       ).map((d) => d.id);
     };
 
-    it('los sacan administradores, supervisor, coordinadores de bodega, comercial y de servicios especiales, asistente de bodega y jefe comercial', () => {
+    it('los sacan administradores, supervisor, coordinadores de bodega, comercial y de servicios especiales, asistente de bodega, jefe comercial y talento humano', () => {
       const acordados = [
         'ADMIN',
         'ASISTENTE_BODEGA',
@@ -368,6 +372,7 @@ describe('matriz acordada de permisos por rol', () => {
         'JEFE_COMERCIAL',
         'SUPERVISOR',
         'SUPER_ADMIN',
+        'TALENTO_HUMANO',
       ];
       // El aprobador saca solo el PDF de sus servicios (el servidor lo limita a esos reportes y a 30 días).
       expect(rolesCon('reportes.ver')).toEqual([...acordados, 'APROBADOR'].sort());

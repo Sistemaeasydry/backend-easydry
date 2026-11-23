@@ -40,6 +40,10 @@ export const CATALOGO_PERMISOS = [
   def('Agencias', 'agencias.precios.gestionar', 'Fijar precios por agencia', 'Fijar o editar el precio override de un servicio general para una agencia (solo ADMIN/SUPER_ADMIN).'),
 
   def('Usuarios', 'usuarios.ver', 'Ver usuarios', 'Listar usuarios y operadores de su ámbito (nombre, rol y estado).'),
+  def('Auditoría', 'auditoria.ver', 'Ver la auditoría', 'Ver quién hizo qué y cuándo, con el valor anterior y el nuevo. Solo se ven las pantallas que el rol tiene activas y los cambios de su alcance.'),
+  def('Auditoría', 'auditoria.exportar', 'Exportar la auditoría', 'Descargar lo que ve en la auditoría a Excel o PDF (queda constancia en la bitácora).'),
+  def('Auditoría', 'auditoria.bitacora', 'Ver quién consultó la auditoría', 'Ver la bitácora de quién consultó o exportó la auditoría, cuándo y con qué filtros.'),
+  def('Usuarios', 'usuarios.datos.editar', 'Editar los datos de la persona', 'Cambiar nombres, apellidos, cédula, celular y ciudad de una persona de su ámbito. No cambia contraseña, rol, estado ni agencia.'),
   def('Usuarios', 'usuarios.gestionar', 'Gestionar usuarios', 'Crear, editar, activar, eliminar y asignar usuarios.'),
   def('Usuarios', 'backup.gestionar', 'Gestionar usuarios Backup', 'Crear usuarios Backup de su región y asignarlos temporalmente a una agencia.'),
   def('Usuarios', 'operadores.ver', 'Ver operadores', 'Ver los lavadores y pulidores fijos asignados a su agencia, con su bahía (solo lectura).'),
@@ -122,7 +126,8 @@ export const CATALOGO_PERMISOS = [
   def('Auditorías', 'inspecciones.eliminar', 'Eliminar auditorías 5S en borrador', 'Eliminar (con registro) una auditoría 5S que aún no se guardó.'),
   def('Auditorías', 'sellos.gestionar', 'Configurar sellos de jefes de taller', 'Crear y editar los sellos de los jefes de taller (nombre, apellido, logo y contraseña) que se usan al calificar y firmar los informes de inspección. Solo Admin y Super Admin.'),
 
-  def('RRHH', 'rrhh.timbrar', 'Timbrar entrada y salida', 'Marcar la entrada y la salida con foto de cámara y ubicación, y ver el historial propio. No lo tienen ADMIN ni SUPER_ADMIN.'),
+  def('RRHH', 'rrhh.timbrar', 'Timbrar entrada y salida', 'Marcar la entrada y la salida con foto de cámara y ubicación, y ver el historial propio.'),
+  def('RRHH', 'rrhh.timbrada.obligatoria', 'Timbrada obligatoria', 'Se le exige timbrar: su horario se evalúa, la ventana limita cuándo puede marcar y se avisa si falta una marca. Sin esta casilla timbrar es voluntario: solo se registra la hora y si fue antes o después de su horario.'),
   def('RRHH', 'rrhh.timbradas.ver', 'Ver timbradas del equipo', 'Consultar las timbradas, con foto y distancia, de las personas de su ámbito.'),
   def('RRHH', 'rrhh.tareas.propias', 'Recibir y completar tareas', 'Ver las tareas que le asignaron y completarlas con respuesta y evidencia. No lo tienen ADMIN ni SUPER_ADMIN.'),
   def('RRHH', 'rrhh.tareas.asignar', 'Asignar y revisar tareas', 'Asignar tareas a personas de su ámbito, y revisar, devolver, cancelar o reasignar las que asignó.'),

@@ -20,8 +20,17 @@ export interface DiaHorario {
 }
 export type SemanaHorario = DiaHorario[];
 
-/** Horario con el que parte todo el personal: 08:00 a 15:00 los siete días. */
-export const HORARIO_POR_DEFECTO: SemanaHorario = Array.from({ length: DIAS_SEMANA }, () => ({ trabaja: true, entrada: '08:00', salida: '15:00' }));
+/** Horario con el que parte todo el personal: 08:00 a 17:00 los siete días. */
+export const HORARIO_POR_DEFECTO: SemanaHorario = Array.from({ length: DIAS_SEMANA }, () => ({ trabaja: true, entrada: '08:00', salida: '17:00' }));
+/** Horario por defecto anterior (08:00 a 15:00): rigió hasta el día anterior a `HORARIO_POR_DEFECTO_DESDE`. */
+export const HORARIO_POR_DEFECTO_ANTERIOR: SemanaHorario = Array.from({ length: DIAS_SEMANA }, () => ({ trabaja: true, entrada: '08:00', salida: '15:00' }));
+/**
+ * Primer día en que rige el horario por defecto de 08:00 a 17:00. Los días anteriores se siguen evaluando con 08:00 a 15:00: un cambio
+ * de horario solo rige hacia adelante y nunca reevalúa lo ya evaluado.
+ */
+export const HORARIO_POR_DEFECTO_DESDE = '2026-11-24';
+/** El horario por defecto que regía ese día (AAAA-MM-DD). */
+export const horarioPorDefectoDe = (dia: string): SemanaHorario => (dia >= HORARIO_POR_DEFECTO_DESDE ? HORARIO_POR_DEFECTO : HORARIO_POR_DEFECTO_ANTERIOR);
 
 export interface AjusteHorario {
   /** Minutos de gracia antes y después de la hora del horario: dentro de ellos la marca es puntual. */
@@ -124,6 +133,16 @@ export function ventanasDe(dia: DiaHorario, ajuste: AjusteHorario): Ventanas {
   };
 }
 
+/**
+ * Marca de quien NO está obligado a timbrar: sin ventana ni horario que la limite. La primera del día es la Entrada y la segunda la Salida;
+ * no hay más de una de cada tipo por día.
+ */
+export function resolverMarcaVoluntaria(ya: { entrada: boolean; salida: boolean }): ResultadoMarca {
+  if (!ya.entrada) return { ok: true, tipo: 'ENTRADA' };
+  if (!ya.salida) return { ok: true, tipo: 'SALIDA' };
+  return { ok: false, motivo: 'YA_REGISTRADA', mensaje: 'Ya registraste tu entrada y tu salida de hoy.' };
+}
+
 export type ResultadoMarca =
   | { ok: true; tipo: TipoMarca }
   | { ok: false; motivo: 'DIA_LIBRE' | 'FUERA_DE_VENTANA' | 'YA_REGISTRADA'; mensaje: string };
@@ -170,7 +189,9 @@ export type EstadoDia =
   | 'ATRASO'
   | 'ENTRADA_TEMPRANA'
   | 'SALIDA_ANTICIPADA'
-  | 'SALIDA_TARDIA';
+  | 'SALIDA_TARDIA'
+  | 'NO_OBLIGATORIO' // el rol no está obligado a timbrar y ese día no marcó
+  | 'REGISTRADO'; // el rol no está obligado a timbrar y marcó: solo se muestra la hora y si fue antes o después de su horario
 
 export interface EvaluacionDia {
   estado: EstadoDia;
@@ -203,6 +224,8 @@ export interface EntradaEvaluacion {
   salidaMin: number | null;
   /** Solo para hoy: el minuto actual, para no dar por faltante lo que todavía puede marcarse. */
   ahoraMin?: number | null;
+  /** false = el rol no está obligado a timbrar: no hay evaluación de cumplimiento, solo el registro de las marcas. Por defecto true. */
+  obligatoria?: boolean;
 }
 
 export function evaluarDia(x: EntradaEvaluacion): EvaluacionDia {
@@ -223,6 +246,11 @@ export function evaluarDia(x: EntradaEvaluacion): EvaluacionDia {
     horasDentroHorario: dentroMin != null ? horas(dentroMin) : null,
   };
 
+  if (x.obligatoria === false) {
+    if (entradaMin == null && salidaMin == null) return { ...comunes, estado: 'NO_OBLIGATORIO', observaciones: [] };
+    // Solo se informa si marcó antes de la hora de entrada de su horario (los minutos de diferencia van aparte); no hay atraso que cumplir.
+    return { ...con, estado: 'REGISTRADO', observaciones: entradaMin != null && entradaMin < e ? ['ENTRADA_TEMPRANA'] : [] };
+  }
   if (!dia.trabaja) return { ...con, estado: 'DIA_LIBRE', observaciones: [] };
   if (entradaMin == null && salidaMin == null) {
     if (x.ahoraMin != null && x.ahoraMin <= e + ajuste.ventanaMin) return { ...comunes, estado: 'PENDIENTE', observaciones: [] };

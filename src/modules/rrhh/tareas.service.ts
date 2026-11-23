@@ -62,16 +62,32 @@ export class TareasService {
     return t.asignadoPorId === String(user.id) || this.esAdmin(user);
   }
 
-  /** Valida a quién se asigna: activo, puede recibir tareas, está en el alcance de quien asigna y no es la misma persona. */
+  /** Quien asigna, con la forma que espera `personaEnAlcance` (la región sale de su agencia o de su bodega si no la trae). */
+  private comoPersona(user: any) {
+    const regionDeAgencia = user?.agencia?.regionId ?? user?.agencia?.region?.id ?? null;
+    return { agenciaId: user?.agenciaId ?? null, regionId: user?.regionId ?? null, agencia: { regionId: regionDeAgencia }, bodega: { regionId: user?.bodega?.regionId ?? null } };
+  }
+
+  /**
+   * Las tareas van en todas las direcciones: hacia abajo y de lado (la persona está en mi alcance) y hacia arriba (yo estoy en el alcance
+   * de la persona, que es quien coordina mi agencia o mi región). Nunca fuera de esos dos casos.
+   */
+  private puedeAsignarA(user: any, persona: any): boolean {
+    if (personaEnAlcance(resolverAlcance(user), persona)) return true;
+    const alcanceDePersona = resolverAlcance({ id: persona.id, regionId: persona.regionId, agenciaId: persona.agenciaId, bodega: persona.bodega, role: persona.role, roleDetails: persona.role });
+    return personaEnAlcance(alcanceDePersona, this.comoPersona(user));
+  }
+
+  /** Valida a quién se asigna: activo, puede recibir tareas, está a mi alcance (o yo al suyo) y no es la misma persona. */
   async validarResponsable(user: any, asignadoAId: string) {
     if (asignadoAId === String(user.id)) throw new BadRequestException('No puedes asignarte una tarea a ti mismo.');
     const persona = await this.prisma.user.findUnique({
       where: { id: asignadoAId },
-      select: { id: true, estado: true, name: true, lastname: true, role: { select: { capacidades: true } }, ...AMBITO_PERSONA },
+      select: { id: true, estado: true, name: true, lastname: true, role: { select: { namerol: true, ambito: true, capacidades: true } }, ...AMBITO_PERSONA },
     });
     if (!persona || persona.estado !== 1) throw new BadRequestException('La persona elegida no existe o está inactiva.');
     if (!persona.role?.capacidades?.includes('rrhh.tareas.propias')) throw new BadRequestException('Esa persona no recibe tareas de RRHH.');
-    if (!personaEnAlcance(resolverAlcance(user), persona)) throw new ForbiddenException('Esa persona está fuera de tu alcance.');
+    if (!this.puedeAsignarA(user, persona)) throw new ForbiddenException('Esa persona está fuera de tu alcance.');
     return persona;
   }
 
@@ -183,12 +199,23 @@ export class TareasService {
     return (await this.presentar([t]))[0];
   }
 
-  /** Personas a las que puedo asignar una tarea: activas, que reciben tareas, dentro de mi alcance y distintas de mí. */
+  /** Personas a las que puedo asignar una tarea: activas, que reciben tareas, a mi alcance o con mi agencia o región en el suyo, y distintas de mí. */
   async asignables(user: any) {
     const alcance = resolverAlcance(user);
+    const yo = this.comoPersona(user);
+    const regionYo = yo.regionId ?? yo.agencia.regionId ?? yo.bodega.regionId;
+    // Hacia arriba: quienes tienen alcance nacional, o el regional/de agencia que me incluye.
+    const superiores: Prisma.UserWhereInput[] = [
+      { role: { ambito: 'GLOBAL' } },
+      ...(regionYo ? [{ role: { ambito: 'REGION' }, OR: [{ regionId: regionYo }, { bodega: { regionId: regionYo } }] } as Prisma.UserWhereInput] : []),
+      ...(yo.agenciaId ? [{ role: { ambito: 'AGENCIA' }, agenciaId: yo.agenciaId } as Prisma.UserWhereInput] : []),
+    ];
     const personas = await this.prisma.user.findMany({
       where: {
-        AND: [whereUsuariosEnAlcance(alcance) as Prisma.UserWhereInput, { estado: 1, id: { not: String(user.id) }, role: { capacidades: { has: 'rrhh.tareas.propias' } } }],
+        AND: [
+          { OR: [whereUsuariosEnAlcance(alcance) as Prisma.UserWhereInput, ...superiores] },
+          { estado: 1, id: { not: String(user.id) }, role: { capacidades: { has: 'rrhh.tareas.propias' } } },
+        ],
       },
       select: { id: true, name: true, lastname: true, role: { select: { namerol: true } }, agencia: { select: { nombre: true } } },
       orderBy: [{ name: 'asc' }, { lastname: 'asc' }],

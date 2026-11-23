@@ -2498,3 +2498,55 @@ model EntregaDotacionEvidencia {
   @@index([entregaId])
   @@map("dotaciones_entregas_evidencias")
 }
+
+/// Auditoría del sistema: quién hizo qué y cuándo. Inmutable (solo se agregan filas). Nunca guarda contraseñas ni tokens.
+model RegistroAuditoria {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  actorId       String
+  /// Nombre y rol del actor al momento de actuar (se conservan aunque después cambien).
+  actorNombre   String
+  actorRol      String
+  /// Código de la pantalla del sistema a la que pertenece (el mismo de `modulos_sistema`): define quién puede ver la fila.
+  modulo        String
+  /// Acción del catálogo de permisos que se ejercía (p. ej. `usuarios.usuarios.datos`) o, si no hay, el método y la ruta.
+  accion        String
+  metodo        String
+  ruta          String
+  entidadTipo   String?
+  entidadId     String?
+  /// Frase corta, legible, de lo que pasó.
+  resumen       String
+  antes         Json?
+  despues       Json?
+  /// Lo que mandó el usuario, sin datos secretos y recortado.
+  datos         Json?
+  /// Dónde ocurrió (para que cada rol vea solo su alcance).
+  agenciaId     String?
+  regionId      String?
+  ip            String?
+
+  @@index([createdAt])
+  @@index([modulo, createdAt])
+  @@index([actorId, createdAt])
+  @@index([agenciaId])
+  @@index([regionId])
+  @@map("auditoria_registros")
+}
+
+/// Quién consultó o exportó la auditoría, con qué filtros.
+model ConsultaAuditoria {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  userId    String
+  userNombre String
+  userRol   String
+  /// CONSULTA | EXCEL | PDF
+  tipo      String
+  filtros   Json?
+  filas     Int      @default(0)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("auditoria_consultas")
+}

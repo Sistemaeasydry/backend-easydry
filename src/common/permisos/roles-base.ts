@@ -43,7 +43,7 @@ const LECTURA_COMERCIAL: CodigoPermiso[] = p(
  * Roles que no ven precios ni costos. Los coordinadores (en su región) y el Jefe Comercial sí los ven. El líder de agencia
  * (y su reemplazo BACKUP y el auxiliar, que copian sus permisos) trabaja con cantidades: nunca ve dinero.
  */
-const ROLES_SIN_PRECIOS = ['LAVADOR', 'LIDER', 'BACKUP', 'AUXILIAR'];
+const ROLES_SIN_PRECIOS = ['LAVADOR', 'LIDER', 'BACKUP', 'AUXILIAR', 'TALENTO_HUMANO'];
 /** Roles que ven inventario pero no el stock de los kits (hoy ninguno: los comerciales y los coordinadores también lo ven). */
 const ROLES_SIN_KITS: string[] = [];
 
@@ -54,7 +54,7 @@ const ROLES_SIN_KITS: string[] = [];
  */
 const ROLES_SOLO_VEN_AUDITORIA = ['LIDER', 'BACKUP', 'AUXILIAR', 'LAVADOR', 'PULIDOR'];
 /** El aprobador solo aprueba servicios: no tiene informes de inspección ni auditorías 5S. */
-const ROLES_SIN_AUDITORIA = ['APROBADOR'];
+const ROLES_SIN_AUDITORIA = ['APROBADOR', 'TALENTO_HUMANO'];
 const ROLES_REVISAN_INFORMES = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR'];
 const CAPACIDADES_AUDITOR: CodigoPermiso[] = p(
   'informes.ver',
@@ -401,6 +401,27 @@ export const ROLES_BASE: RolBase[] = [
       'sync.usar',
     ),
   },
+  {
+    namerol: 'TALENTO_HUMANO',
+    descripcion:
+      'Talento Humano: gestiona todo RRHH a nivel nacional (timbradas, horarios, tareas, ubicaciones y dotaciones). Ve usuarios y lavadores sin editarlos.',
+    ambito: 'GLOBAL',
+    capacidades: p(
+      'agencias.consultar',
+      'agencias.ver',
+      'usuarios.ver',
+      'catalogo.ver',
+      'dashboard.ver',
+      'operadores.ver',
+      'dotaciones.ver',
+      'dotaciones.gestionar',
+      'dotaciones.entregar',
+      'reportes.ver',
+      'reportes.excel',
+      'reportes.pdf',
+      'sync.usar',
+    ),
+  },
 ];
 
 // Auditorías: los roles que auditan reciben el paquete de auditor; el líder, el lavador y el pulidor solo ven su resultado.
@@ -423,17 +444,27 @@ for (const rol of ROLES_BASE) {
 }
 // RRHH: todos los roles menos ADMIN y SUPER_ADMIN timbran y reciben tareas. Asignan tareas y ven las timbradas del equipo (dentro de su
 // ámbito) los administradores, el supervisor, los coordinadores y el líder. Solo ADMIN y SUPER_ADMIN configuran las ubicaciones.
+// ADMIN, SUPER_ADMIN y APROBADOR pueden timbrar, pero no están obligados: no tienen `rrhh.timbrada.obligatoria`. ADMIN y SUPER_ADMIN
+// tampoco reciben tareas.
 const ROLES_NO_TIMBRAN = ['SUPER_ADMIN', 'ADMIN'];
+const ROLES_TIMBRADA_VOLUNTARIA = ['SUPER_ADMIN', 'ADMIN', 'APROBADOR'];
 // El BACKUP reemplaza al líder y el AUXILIAR copia sus permisos (lavador con las capacidades del líder): heredan los suyos.
-const ROLES_ASIGNAN_TAREAS = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'LIDER', 'BACKUP', 'AUXILIAR'];
-const ROLES_CONFIGURAN_UBICACION = ['SUPER_ADMIN', 'ADMIN'];
-const ROLES_EDITAN_HORARIOS = ['SUPER_ADMIN', 'ADMIN'];
+// Lavador, pulidor, líder y backup (personal operativo) solo reciben tareas: no las asignan. El líder y el backup sí ven las timbradas de su agencia.
+const ROLES_ASIGNAN_TAREAS = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'TALENTO_HUMANO', 'AUXILIAR'];
+const ROLES_VEN_TIMBRADAS_EQUIPO = [...ROLES_ASIGNAN_TAREAS, 'LIDER', 'BACKUP'];
+const ROLES_CONFIGURAN_UBICACION = ['SUPER_ADMIN', 'ADMIN', 'TALENTO_HUMANO'];
+const ROLES_EDITAN_HORARIOS = ['SUPER_ADMIN', 'ADMIN', 'TALENTO_HUMANO'];
 const CAPACIDADES_RRHH_PROPIAS: CodigoPermiso[] = p('rrhh.timbrar', 'rrhh.tareas.propias');
 for (const rol of ROLES_BASE) {
-  const quitar = ROLES_NO_TIMBRAN.includes(rol.namerol) ? CAPACIDADES_RRHH_PROPIAS : [];
+  const quitar: CodigoPermiso[] = [
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.tareas.propias') : []),
+    ...(ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? p('rrhh.timbrada.obligatoria') : []),
+  ];
   const extra: CodigoPermiso[] = [
-    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? [] : CAPACIDADES_RRHH_PROPIAS),
-    ...(ROLES_ASIGNAN_TAREAS.includes(rol.namerol) ? p('rrhh.tareas.asignar', 'rrhh.tareas.crear', 'rrhh.tareas.revisar', 'rrhh.tareas.cancelar', 'rrhh.tareas.reasignar', 'rrhh.timbradas.ver') : []),
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.timbrar') : CAPACIDADES_RRHH_PROPIAS),
+    ...(ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? [] : p('rrhh.timbrada.obligatoria')),
+    ...(ROLES_ASIGNAN_TAREAS.includes(rol.namerol) ? p('rrhh.tareas.asignar', 'rrhh.tareas.crear', 'rrhh.tareas.revisar', 'rrhh.tareas.cancelar', 'rrhh.tareas.reasignar') : []),
+    ...(ROLES_VEN_TIMBRADAS_EQUIPO.includes(rol.namerol) ? p('rrhh.timbradas.ver') : []),
     ...(ROLES_CONFIGURAN_UBICACION.includes(rol.namerol) ? p('rrhh.ubicaciones.gestionar', 'rrhh.ubicaciones.quitar') : []),
     ...(ROLES_EDITAN_HORARIOS.includes(rol.namerol) ? p('rrhh.horarios.gestionar') : []),
   ];

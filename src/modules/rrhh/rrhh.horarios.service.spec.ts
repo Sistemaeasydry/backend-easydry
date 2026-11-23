@@ -46,9 +46,11 @@ describe('HorariosService (base real)', () => {
 
   afterEach(() => vi.setSystemTime(HOY));
 
-  it('sin cambios rige el horario por defecto: 08:00 a 15:00 los siete días', async () => {
+  it('sin cambios rige el horario por defecto: 08:00 a 17:00 los siete días', async () => {
     const c = await service.contextoDe(ids.lavador, '2032-06-15');
-    expect(c.dia).toEqual({ trabaja: true, entrada: '08:00', salida: '15:00' });
+    expect(c.dia).toEqual({ trabaja: true, entrada: '08:00', salida: '17:00' });
+    // Los días anteriores al cambio siguen con el horario de antes: nada se reevalúa hacia atrás.
+    expect((await service.contextoDe(ids.lavador, '2026-11-23')).dia).toEqual({ trabaja: true, entrada: '08:00', salida: '15:00' });
     expect(c.ajuste).toEqual({ toleranciaMin: 10, ventanaMin: 120 });
     expect((await service.mio(actores.lavador)).porDefecto).toBe(true);
   });

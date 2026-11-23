@@ -41,6 +41,14 @@ describe('catálogo según los módulos activos del rol', () => {
     expect(servicio.catalogo(usuario('SUPERVISOR', 'REGION', PERMISOS_REPORTES))).toEqual([]);
   });
 
+  it('los reportes de RRHH salen con el módulo de timbradas, y los de dotaciones solo con el de dotaciones', () => {
+    const { servicio } = crear();
+    const soloTimbradas = servicio.catalogo(usuario('SUPERVISOR', 'REGION', [...PERMISOS_REPORTES, 'rrhh.timbradas.ver'])).map((r) => r.id);
+    expect(soloTimbradas).toEqual(['rrhh-timbradas']);
+    const talentoHumano = servicio.catalogo(usuario('TALENTO_HUMANO', 'GLOBAL', [...PERMISOS_REPORTES, 'rrhh.timbradas.ver', 'dotaciones.ver'])).map((r) => r.id);
+    expect(talentoHumano.sort()).toEqual(['rrhh-dotaciones-entregas', 'rrhh-dotaciones-stock', 'rrhh-timbradas']);
+  });
+
   it('el catálogo de precios exige también ver precios', () => {
     const { servicio } = crear();
     const sin = servicio.catalogo(usuario('SUPERVISOR', 'REGION', [...PERMISOS_REPORTES, 'catalogo.ver'])).map((r) => r.id);
@@ -51,7 +59,7 @@ describe('catálogo según los módulos activos del rol', () => {
 
   it('SUPER_ADMIN ve todos los reportes', () => {
     const { servicio } = crear();
-    expect(servicio.catalogo(usuario('SUPER_ADMIN', 'GLOBAL', []))).toHaveLength(19);
+    expect(servicio.catalogo(usuario('SUPER_ADMIN', 'GLOBAL', []))).toHaveLength(22);
   });
 });
 

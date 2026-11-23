@@ -68,6 +68,7 @@ const MODULOS_DATA = [
   { codigo: 'rrhh/dotaciones', nombre: 'Dotaciones', descripcion: 'Uniformes, EPP y otros productos con stock propio, planes de entrega por rol o agencia y entregas con evidencia fotográfica', icono: 'package-check', rutaPrincipal: '/rrhh/dotaciones', grupo: 'RRHH', disponibleEnApp: false, orden: 156 },
   { codigo: 'reportes', nombre: 'Reportes Operativos', descripcion: 'Generación e impresión de informes consolidados de servicios y rendimiento', icono: 'file-bar-chart', rutaPrincipal: '/reportes', grupo: 'Administración', disponibleEnApp: false, orden: 150 },
   { codigo: 'usuarios', nombre: 'Usuarios, Roles y Permisos', descripcion: 'Directorio de colaboradores y matriz de creación/configuración de roles dinámicos', icono: 'users', rutaPrincipal: '/usuarios', grupo: 'Administración', disponibleEnApp: false, orden: 160 },
+  { codigo: 'auditoria', nombre: 'Auditoría', descripcion: 'Quién hizo qué y cuándo en el sistema, con el valor anterior y el nuevo; cada rol ve solo los módulos que tiene activos y los cambios de su alcance', icono: 'history', rutaPrincipal: '/auditoria', grupo: 'Administración', disponibleEnApp: false, orden: 215 },
   { codigo: 'perfil', nombre: 'Mi Perfil de Usuario', descripcion: 'Información personal, credenciales y datos de sucursal', icono: 'user', rutaPrincipal: '/perfil', grupo: 'Mi Cuenta', disponibleEnApp: true, orden: 170 },
 ];
 

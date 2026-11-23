@@ -66,6 +66,7 @@ import {
   ListUsuariosAgenciaDto,
   ToggleEstadoUsuarioDto,
   UpdateUsuarioDto,
+  UpdateDatosPersonaDto,
   CreateUsuarioDto,
   ListOperadoresDto,
   CreateOperadorDto,
@@ -83,6 +84,8 @@ import { tieneAlgunPermiso, tienePermiso } from '../../common/permisos/capacidad
 import { exigirPasswordSegura } from '../../common/utils/password-politica.js';
 import { CacheService } from '../../common/cache/cache.service.js';
 import { USUARIO_PREFIJO } from '../auth/jwt.strategy.js';
+import { personaEnAlcance } from '../rrhh/rrhh.reglas.js';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 @Injectable()
 export class AgenciasService {
@@ -90,6 +93,8 @@ export class AgenciasService {
     private readonly prisma: PrismaService,
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly cache?: CacheService,
+    /** Deja constancia de los cambios de datos de una persona con el valor anterior y el nuevo. */
+    @Optional() private readonly auditoria?: AuditoriaService,
   ) {}
 
   /** Avisa al propio usuario afectado (rol, estado o agencia/región cambiados) y a admin/super admin. Nunca bloquea el flujo. */
@@ -2416,6 +2421,57 @@ export class AgenciasService {
   private async asegurarCedulaLibre(cedula: string, exceptoUserId?: string) {
     const otro = await this.prisma.user.findFirst({ where: { cedula, ...(exceptoUserId ? { id: { not: exceptoUserId } } : {}) }, select: { id: true } });
     if (otro) throw new ConflictException(`Ya existe un usuario con la cédula "${cedula}"`);
+  }
+
+  /**
+   * Edita solo los datos de la persona (nombres, apellidos, cédula, celular y ciudad), para quien tiene `usuarios.usuarios.datos`.
+   * No toca contraseña, rol, estado ni agencia, y solo dentro del alcance de quien edita. Devuelve lo que cambió (antes y después).
+   */
+  async updateDatosPersona(dto: UpdateDatosPersonaDto, actor?: any) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.id },
+      include: { role: { select: { namerol: true } }, agencia: { select: { regionId: true } }, bodega: { select: { regionId: true } } },
+    });
+    if (!user) throw new NotFoundException(`Usuario con ID "${dto.id}" no encontrado`);
+    if (user.role?.namerol === 'SUPER_ADMIN') {
+      throw new ForbiddenException('El usuario Super Administrador es de sistema y no puede gestionarse desde la aplicación.');
+    }
+    if (!personaEnAlcance(resolverAlcance(actor), user)) throw new ForbiddenException('Esa persona está fuera de tu alcance.');
+
+    const nuevo: { name?: string; lastname?: string; telefono?: string | null; cedula?: string | null; ciudad?: string | null } = {};
+    if (dto.name !== undefined) nuevo.name = dto.name.trim();
+    if (dto.lastname !== undefined) nuevo.lastname = dto.lastname.trim();
+    if (dto.telefono !== undefined) nuevo.telefono = normalizarCelularEc(dto.telefono) || null;
+    if (dto.cedula !== undefined) {
+      nuevo.cedula = dto.cedula.trim() || null;
+      if (nuevo.cedula) await this.asegurarCedulaLibre(nuevo.cedula, user.id);
+    }
+    if (dto.ciudad !== undefined) nuevo.ciudad = dto.ciudad.trim() || null;
+
+    const cambios = (Object.keys(nuevo) as Array<keyof typeof nuevo>)
+      .filter((k) => (nuevo[k] ?? null) !== ((user as any)[k] ?? null))
+      .map((k) => ({ campo: k, antes: (user as any)[k] ?? null, despues: nuevo[k] ?? null }));
+    if (cambios.length === 0) return { id: user.id, cambios: [] };
+
+    await this.prisma.user.update({ where: { id: user.id }, data: Object.fromEntries(cambios.map((c) => [c.campo, c.despues])) });
+    await this.cache?.del(`${USUARIO_PREFIJO}${user.id}`);
+    void this.auditoria?.registrar(
+      {
+        modulo: 'usuarios',
+        accion: 'usuarios.usuarios.datos',
+        metodo: 'POST',
+        ruta: 'agencias/usuarios/update-datos',
+        resumen: `Datos de ${apellidosNombres(user)} editados: ${cambios.map((c) => c.campo).join(', ')}`,
+        entidadTipo: 'usuario',
+        entidadId: user.id,
+        antes: Object.fromEntries(cambios.map((c) => [c.campo, c.antes])),
+        despues: Object.fromEntries(cambios.map((c) => [c.campo, c.despues])),
+        agenciaId: user.agenciaId,
+        regionId: user.regionId ?? user.agencia?.regionId ?? user.bodega?.regionId ?? null,
+      },
+      actor,
+    );
+    return { id: user.id, cambios };
   }
 
   async updateUsuario(dto: UpdateUsuarioDto, actor?: any) {

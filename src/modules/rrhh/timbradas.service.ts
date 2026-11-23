@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -6,7 +6,7 @@ import { HorariosService } from './horarios.service.js';
 import { resolverAlcance } from '../../common/permisos/alcance.js';
 import { FUNCION, tieneAlgunaFuncion, tieneFuncion } from '../../common/permisos/funciones.js';
 import type { ConsultarTimbradasDto, RegistrarTimbradaDto } from './dto/rrhh.dto.js';
-import { resolverMarca } from './rrhh.horarios.js';
+import { resolverMarca, resolverMarcaVoluntaria } from './rrhh.horarios.js';
 import {
   diaComoFecha,
   evaluarUbicacion,
@@ -45,18 +45,22 @@ export class TimbradasService {
     private readonly horarios: HorariosService,
   ) {}
 
-  /** Los administradores no timbran. */
-  private exigirQuePuedeTimbrar(user: any): void {
-    if (tieneFuncion(user, FUNCION.ADMINISTRADOR)) throw new ForbiddenException('Los administradores no timbran.');
+  /** La obligación de timbrar es una casilla del rol («Timbrada obligatoria»). Sin ella timbrar es voluntario: no hay ventana, evaluación ni avisos. */
+  private esObligatoria(user: any): boolean {
+    const caps = user?.roleDetails?.capacidades ?? user?.role?.capacidades;
+    return Array.isArray(caps) && caps.includes('rrhh.timbrada.obligatoria');
   }
 
   /**
-   * Contra qué sitio se valida cada rol:
-   *  - BODEGA: el personal de bodega, solo en su bodega.
-   *  - AGENCIA_ASIGNADA: lavadores, auxiliares, líderes y backup, solo en su agencia.
-   *  - CUALQUIER_AGENCIA: los demás roles, en cualquier agencia con ubicación guardada.
+   * Contra qué sitio se valida cada rol. Manda la categoría del rol (la que se configura en «Roles y permisos»):
+   *  - ADMINISTRACION: en cualquier agencia con ubicación guardada (y el personal de bodega, además, en su bodega).
+   *  - OPERADOR: solo en su agencia asignada. El técnico, que trabaja en varias agencias, en cualquiera de su región.
+   * Si el rol no trae categoría (sesiones antiguas, pruebas con roles armados a mano) se decide por el nombre del rol, como antes.
    */
   private modoDe(user: any): ModoTimbrada {
+    const categoria = user?.roleDetails?.categoria ?? user?.role?.categoria;
+    if (categoria === 'ADMINISTRACION') return 'CUALQUIER_AGENCIA';
+    if (categoria === 'OPERADOR') return tieneFuncion(user, FUNCION.TECNICO) ? 'CUALQUIER_AGENCIA' : 'AGENCIA_ASIGNADA';
     if (tieneAlgunaFuncion(user, [FUNCION.COORD_BODEGA, FUNCION.ASISTENTE_BODEGA])) return 'BODEGA';
     if (tieneAlgunaFuncion(user, [FUNCION.LAVADOR, FUNCION.AUXILIAR, FUNCION.LIDER, FUNCION.BACKUP, FUNCION.LIDER_AGENCIA])) return 'AGENCIA_ASIGNADA';
     return 'CUALQUIER_AGENCIA';
@@ -79,26 +83,36 @@ export class TimbradasService {
       return a ? [aSitio(a, 'AGENCIA')] : [];
     }
     // Cualquier agencia: solo cuentan las activas con ubicación guardada; si ninguna la tiene, no se puede timbrar.
-    const agencias = await this.prisma.agencia.findMany({ where: { estado: 1, latitud: { not: null }, longitud: { not: null } }, select: campos });
-    return agencias.map((a) => aSitio(a, 'AGENCIA'));
+    // El técnico (rol operador con categoría) solo en las de su región; sin región asignada no tiene dónde timbrar.
+    const soloSuRegion = (user?.roleDetails?.categoria ?? user?.role?.categoria) === 'OPERADOR' && tieneFuncion(user, FUNCION.TECNICO);
+    if (soloSuRegion && !user.regionId) return [];
+    const agencias = await this.prisma.agencia.findMany({
+      where: { estado: 1, latitud: { not: null }, longitud: { not: null }, ...(soloSuRegion ? { regionId: user.regionId } : {}) },
+      select: campos,
+    });
+    const sitios = agencias.map((a) => aSitio(a, 'AGENCIA'));
+    // El personal de bodega de categoría administración también puede timbrar en su bodega.
+    if (user?.bodegaId && tieneAlgunaFuncion(user, [FUNCION.COORD_BODEGA, FUNCION.ASISTENTE_BODEGA])) {
+      const b = await this.prisma.bodega.findUnique({ where: { id: user.bodegaId }, select: campos });
+      if (b) sitios.push(aSitio(b, 'BODEGA'));
+    }
+    return sitios;
   }
 
   /** Lo que la pantalla necesita para timbrar: la hora del servidor, lo que ya marcó hoy y si debe mandar ubicación. */
   async estado(user: any, origen: OrigenTimbrada = 'APP') {
-    this.exigirQuePuedeTimbrar(user);
     const ahora = new Date();
     const f = fechaEnEcuador(ahora);
     const modo = this.modoDe(user);
+    const obligatoria = this.esObligatoria(user);
     const [sitios, marcas, hoy] = await Promise.all([
       this.sitiosDe(user, modo),
       this.prisma.timbrada.findMany({ where: { userId: String(user.id), fechaDia: diaComoFecha(f.dia) }, orderBy: { marcadaEn: 'asc' } }),
       this.horarios.resumenHoy(String(user.id), ahora),
     ]);
     // Qué marca correspondería ahora según el horario: null si hoy es día libre o está fuera de las ventanas.
-    const siguiente = resolverMarca(hoy.horario, hoy.ajuste, f.hora * 60 + f.minuto, {
-      entrada: marcas.some((m) => m.tipo === 'ENTRADA'),
-      salida: marcas.some((m) => m.tipo === 'SALIDA'),
-    });
+    const yaMarcado = { entrada: marcas.some((m) => m.tipo === 'ENTRADA'), salida: marcas.some((m) => m.tipo === 'SALIDA') };
+    const siguiente = obligatoria ? resolverMarca(hoy.horario, hoy.ajuste, f.hora * 60 + f.minuto, yaMarcado) : resolverMarcaVoluntaria(yaMarcado);
     // Sin una agencia o bodega con ubicación contra la cual validar tampoco se puede timbrar.
     const sinRef = sinReferencia(sitios, modo);
     return {
@@ -108,7 +122,8 @@ export class TimbradasService {
       puedeTimbrar: siguiente.ok && !sinRef,
       motivoBloqueo: siguiente.ok ? (sinRef?.mensaje ?? null) : siguiente.mensaje,
       horario: { trabaja: hoy.horario.trabaja, entrada: hoy.horario.entrada, salida: hoy.horario.salida },
-      ventanas: hoy.ventanas,
+      obligatoria,
+      ventanas: obligatoria ? hoy.ventanas : null,
       toleranciaMin: hoy.ajuste.toleranciaMin,
       ventanaMin: hoy.ajuste.ventanaMin,
       marcasHoy: marcas.map((m) => ({ id: m.id, tipo: m.tipo, marcadaEn: m.marcadaEn, verificacion: m.verificacion, distanciaM: m.distanciaM })),
@@ -123,7 +138,6 @@ export class TimbradasService {
   }
 
   async registrar(dto: RegistrarTimbradaDto, user: any) {
-    this.exigirQuePuedeTimbrar(user);
     const userId = String(user.id);
     const ahora = new Date();
     const f = fechaEnEcuador(ahora);
@@ -135,7 +149,8 @@ export class TimbradasService {
       this.prisma.timbrada.findMany({ where: { userId, fechaDia }, select: { tipo: true } }),
     ]);
     const ya = { entrada: previas.some((m) => m.tipo === 'ENTRADA'), salida: previas.some((m) => m.tipo === 'SALIDA') };
-    const resolucion = resolverMarca(contexto.dia, contexto.ajuste, f.hora * 60 + f.minuto, ya);
+    const obligatoria = this.esObligatoria(user);
+    const resolucion = obligatoria ? resolverMarca(contexto.dia, contexto.ajuste, f.hora * 60 + f.minuto, ya) : resolverMarcaVoluntaria(ya);
     if (!resolucion.ok) {
       const Excepcion = resolucion.motivo === 'YA_REGISTRADA' ? ConflictException : BadRequestException;
       throw new Excepcion({ message: resolucion.mensaje, codigo: resolucion.motivo });
@@ -186,7 +201,7 @@ export class TimbradasService {
     }
 
     // Una salida sin entrada se acepta, pero el día queda incompleto: se avisa a la persona y a los administradores.
-    if (tipo === 'SALIDA' && !ya.entrada) void this.horarios.avisarSalidaSinEntrada(userId, f.dia);
+    if (obligatoria && tipo === 'SALIDA' && !ya.entrada) void this.horarios.avisarSalidaSinEntrada(userId, f.dia);
 
     return {
       id: creada.id,
@@ -237,7 +252,6 @@ export class TimbradasService {
 
   /** Historial propio. */
   async mias(dto: ConsultarTimbradasDto, user: any) {
-    this.exigirQuePuedeTimbrar(user);
     const { desde, hasta } = this.rango(dto);
     const filas = await this.prisma.timbrada.findMany({
       where: { userId: String(user.id), fechaDia: { gte: desde, lte: hasta } },
@@ -245,7 +259,7 @@ export class TimbradasService {
       take: FILAS_MAXIMAS,
     });
     const presentadas = await this.presentar(filas, new Map([[String(user.id), { id: String(user.id), nombre: user.nombre ?? apellidosNombres(user), rol: user.roleDetails?.namerol ?? '' }]]));
-    const evaluacion = await this.horarios.evaluar([{ id: String(user.id), createdAt: user.createdAt ? new Date(user.createdAt) : new Date(0) }], desde, hasta, filas);
+    const evaluacion = await this.horarios.evaluar([{ id: String(user.id), createdAt: user.createdAt ? new Date(user.createdAt) : new Date(0), obligatoria: this.esObligatoria(user) }], desde, hasta, filas);
     return { ...presentadas, evaluacion };
   }
 
@@ -263,10 +277,10 @@ export class TimbradasService {
       orderBy: [{ fechaDia: 'desc' }, { marcadaEn: 'asc' }],
       take: FILAS_MAXIMAS,
     });
-    const mapa = new Map(personas.map((p) => [p.id, { id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '' }]));
+    const mapa = new Map(personas.map((p) => [p.id, { id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '', obligatoria: !!p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') }]));
     const resultado = await this.presentar(filas, mapa);
-    // Solo se evalúa a quien timbra (los administradores no tienen horario).
-    const evaluacion = await this.horarios.evaluar(personas.filter((p) => p.role?.capacidades?.includes('rrhh.timbrar')).map((p) => ({ id: p.id, createdAt: p.createdAt })), desde, hasta, filas);
+    // Se evalúa a todos: quien tiene la timbrada obligatoria, contra su horario; quien no, solo con el registro de sus marcas («No obligatorio timbrar»).
+    const evaluacion = await this.horarios.evaluar(personas.map((p) => ({ id: p.id, createdAt: p.createdAt, obligatoria: !!p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') })), desde, hasta, filas);
     return { ...resultado, personas: [...mapa.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)), evaluacion };
   }
 

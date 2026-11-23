@@ -55,7 +55,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       omit: { passwordHash: true },
       include: {
         role: {
-          select: { id: true, namerol: true, permisos: true, acciones: true, capacidades: true, ambito: true, esSistema: true, estado: true },
+          select: { id: true, namerol: true, permisos: true, acciones: true, capacidades: true, ambito: true, categoria: true, esSistema: true, estado: true },
         },
         agencia: {
           select: { id: true, codigo: true, nombre: true, region: true },
