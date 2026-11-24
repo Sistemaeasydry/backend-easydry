@@ -25,12 +25,11 @@ const ROLES_SEED = JSON.parse(fs.readFileSync(RUTA_ROLES, 'utf8')) as RolSeed[];
  * Seed idempotente de EasyDry.
  *
  * Por defecto NO borra nada: crea lo que falta (módulos, los 15 roles oficiales con sus permisos, catálogos base de inventario,
- * los servicios de retoque y las cuentas Super Admin y Admin) y deja intacto lo que ya existe. Los roles salen de prisma/data/roles.json: los permisos
- * tal como están configurados en «Roles y permisos» (páginas, sub-páginas y acciones). Los correos y contraseñas de las dos cuentas vienen del .env, sin valores por defecto.
+ * los servicios de retoque y la cuenta Admin, si se define) y deja intacto lo que ya existe. Los roles salen de prisma/data/roles.json: los permisos
+ * tal como están configurados en «Roles y permisos» (páginas, sub-páginas y acciones). El Super Admin no lo crea el seed sino `prisma:cargar-excels`. El correo y la contraseña del Admin vienen del .env, sin valores por defecto.
  *
  * Variables de entorno:
- *   SEED_SUPERADMIN_EMAIL / SEED_SUPERADMIN_PASSWORD   cuenta Super Admin (ambas obligatorias)
- *   SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD             cuenta Admin (ambas obligatorias)
+ *   SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD             cuenta Admin (opcional: sin SEED_ADMIN_EMAIL no se crea)
  *   SEED_ACTUALIZAR_ROLES=SI     restablece los permisos de los roles oficiales a los de prisma/data/roles.json
  *   SEED_RESET=SI                VACÍA toda la base antes de sembrar (en producción exige además SEED_CONFIRMAR_PRODUCCION=SI)
  */
@@ -147,28 +146,24 @@ async function main() {
     }
   }
 
-  // 3. Cuentas Super Admin y Admin
-  console.log('👥 Verificando cuentas Super Admin y Admin...');
-  const cuentas = [
-    {
-      rol: 'SUPER_ADMIN',
-      email: credencial('SEED_SUPERADMIN_EMAIL').toLowerCase(),
-      password: credencial('SEED_SUPERADMIN_PASSWORD'),
-      name: 'Super',
-      lastname: 'Admin',
-    },
-    {
+  // 3. Cuenta Admin (opcional). El Super Admin NO se crea aquí: lo crea `prisma:cargar-excels` (cédula SUPER_ADMIN_CEDULA).
+  console.log('👥 Verificando la cuenta Admin...');
+  const cuentas: { rol: string; email: string; password: string; name: string; lastname: string; variablePassword: string }[] = [];
+  // La cuenta Admin es opcional: sin SEED_ADMIN_EMAIL no se crea (los admins se pueden crear después desde el panel).
+  if (process.env.SEED_ADMIN_EMAIL?.trim()) {
+    cuentas.push({
       rol: 'ADMIN',
       email: credencial('SEED_ADMIN_EMAIL').toLowerCase(),
       password: credencial('SEED_ADMIN_PASSWORD'),
       name: 'Administrador',
       lastname: 'EasyDry',
-    },
-  ];
+      variablePassword: 'SEED_ADMIN_PASSWORD',
+    });
+  }
   // Las contraseñas de las cuentas de sistema cumplen la misma política que cualquier usuario (la del seed no es una excepción).
-  for (const [variable, c] of [['SEED_SUPERADMIN_PASSWORD', cuentas[0]], ['SEED_ADMIN_PASSWORD', cuentas[1]]] as const) {
+  for (const c of cuentas) {
     const motivo = motivoPasswordDebil(c.password, c.email);
-    if (motivo) throw new Error(`${variable} no cumple la política de contraseñas: ${motivo}`);
+    if (motivo) throw new Error(`${c.variablePassword} no cumple la política de contraseñas: ${motivo}`);
   }
   for (const c of cuentas) {
     const existe = await prisma.user.findUnique({ where: { email: c.email } });

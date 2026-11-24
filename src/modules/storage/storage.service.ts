@@ -1039,33 +1039,37 @@ export class StorageService implements OnModuleInit {
   }
 
   public async deleteUserProfileImages(userId?: string): Promise<void> {
-    const prefix = `usuarios/${this.profileUserId(userId)}/perfil/`;
-    try {
-      const listed = await this.s3Client.send(
-        new ListObjectsV2Command({
-          Bucket: this.bucketName,
-          Prefix: prefix,
-        }),
-      );
-      const objects = (listed.Contents || [])
-        .map((item) => item.Key)
-        .filter((key): key is string => Boolean(key));
-      if (!objects.length) return;
+    const carpeta = `usuarios/${this.profileUserId(userId)}/perfil/`;
+    // El original y sus copias (miniatura y vista media) viven en prefijos distintos.
+    const prefixes = [carpeta, `thumbs/${carpeta}`, `view/${carpeta}`];
+    for (const prefix of prefixes) {
+      try {
+        const listed = await this.s3Client.send(
+          new ListObjectsV2Command({
+            Bucket: this.bucketName,
+            Prefix: prefix,
+          }),
+        );
+        const objects = (listed.Contents || [])
+          .map((item) => item.Key)
+          .filter((key): key is string => Boolean(key));
+        if (!objects.length) continue;
 
-      await this.s3Client.send(
-        new DeleteObjectsCommand({
-          Bucket: this.bucketName,
-          Delete: { Objects: objects.map((Key) => ({ Key })), Quiet: true },
-        }),
-      );
-      this.logger.log(
-        `Avatar anterior eliminado: ${prefix} (${objects.length})`,
-      );
-    } catch (error) {
-      this.logger.warn(
-        `No se pudieron eliminar avatares previos en ${prefix}`,
-        error as Error,
-      );
+        await this.s3Client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.bucketName,
+            Delete: { Objects: objects.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+        this.logger.log(
+          `Avatar anterior eliminado: ${prefix} (${objects.length})`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `No se pudieron eliminar avatares previos en ${prefix}`,
+          error as Error,
+        );
+      }
     }
   }
 

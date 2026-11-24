@@ -82,7 +82,7 @@ backend-easydry/
    | Seguridad | `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_EXPIRATION` | **Obligatorias en producción**: el servidor no arranca sin ellas. Los valores de la plantilla son solo de desarrollo. |
    | Red | `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `TRUST_PROXY`, `COOKIE_SAMESITE` | `CORS_ORIGIN` debe incluir el dominio del panel (también lo valida el WebSocket). El refresh token del navegador va en una cookie HttpOnly; con web y API en dominios distintos usa `COOKIE_SAMESITE=none` (HTTPS). |
    | Almacenamiento | `AWS_REGION`, `AWS_S3_BUCKET_NAME`, `AWS_S3_PUBLIC_URL_PREFIX`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT` | S3 es obligatorio (sin respaldo local). En AWS usa un IAM Role y deja vacías las dos claves. |
-   | Seed | `SEED_SUPERADMIN_EMAIL/PASSWORD`, `SEED_ADMIN_EMAIL/PASSWORD` | Obligatorias, sin valores por defecto. Las contraseñas cumplen la política (10+ caracteres, mayúscula, minúscula, número y especial). |
+   | Seed | `SEED_ADMIN_EMAIL/PASSWORD` | Opcionales (sin `SEED_ADMIN_EMAIL` no se crea el Admin). El Super Admin lo crea `prisma:cargar-excels`, no el seed. Las contraseñas cumplen la política (10+ caracteres, mayúscula, minúscula, número y especial). |
    | Importación | `IMPORT_PASSWORD_INICIAL` | Contraseña inicial de los usuarios nuevos del Excel. |
    | Archivado | `ARCHIVADO_ACTIVO`, `ARCHIVADO_SIMULACRO` | Ver *Archivado histórico*. |
    | Swagger | `SWAGGER_ENABLED` | Apagado en producción salvo que se active a propósito. |
@@ -130,7 +130,7 @@ npx prisma db seed
 ```
 `SEED_ACTUALIZAR_ROLES=SI` restablece los permisos de los roles oficiales a los de `prisma/data/roles.json` (los permisos tal como están en «Roles y permisos»); `SEED_RESET=SI` **vacía toda la base** (en producción exige además `SEED_CONFIRMAR_PRODUCCION=SI`).
 
-Los demás usuarios (lavadores, pulidores, líderes, aprobadores, etc.) se cargan con el importador del Excel `DATOS AGENCIAS.xlsx` (`pnpm run prisma:import-agencias`, ver [USUARIOS-DEMO.md](../USUARIOS-DEMO.md)) o se crean desde el módulo **Usuarios** de la web.
+El resto del personal (lavadores y pulidores), las agencias, los servicios y la maquinaria se cargan con un solo script desde los cinco Excel de la raíz del repositorio (`pnpm run prisma:cargar-excels`, ver [USUARIOS-DEMO.md](../USUARIOS-DEMO.md)) o se crean desde el módulo **Usuarios** de la web.
 
 #### C. Crear una nueva migración (Durante el desarrollo de nuevas entidades)
 Cuando agregues o modifiques modelos en `prisma/schema.prisma`:
