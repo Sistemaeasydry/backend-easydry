@@ -213,7 +213,8 @@ export class TareasService {
     const personas = await this.prisma.user.findMany({
       where: {
         AND: [
-          { OR: [whereUsuariosEnAlcance(alcance) as Prisma.UserWhereInput, ...superiores] },
+          // Con alcance nacional el filtro de alcance es `{}` (todos); dentro de un `OR` ese `{}` no se comporta como «todos», así que se omite.
+          alcance.tipo === 'GLOBAL' ? {} : { OR: [whereUsuariosEnAlcance(alcance) as Prisma.UserWhereInput, ...superiores] },
           { estado: 1, id: { not: String(user.id) }, role: { capacidades: { has: 'rrhh.tareas.propias' } } },
         ],
       },

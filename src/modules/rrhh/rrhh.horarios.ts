@@ -231,7 +231,8 @@ export interface EntradaEvaluacion {
 export function evaluarDia(x: EntradaEvaluacion): EvaluacionDia {
   const { dia, ajuste, entradaMin, salidaMin } = x;
   const base = { ...VACIA, entradaReal: entradaMin != null ? aHHMM(entradaMin) : null, salidaReal: salidaMin != null ? aHHMM(salidaMin) : null };
-  if (!dia || !ajuste) return { ...base, estado: 'SIN_HORARIO', observaciones: [] };
+  // Sin horario ese día no hay con qué comparar, pero si la persona marcó, la marca se muestra (solo el registro, sin juicio).
+  if (!dia || !ajuste) return { ...base, estado: entradaMin != null || salidaMin != null ? 'REGISTRADO' : 'SIN_HORARIO', observaciones: [] };
 
   const e = aMinutos(dia.entrada);
   const s = aMinutos(dia.salida);

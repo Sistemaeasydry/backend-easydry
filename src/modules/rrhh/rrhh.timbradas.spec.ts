@@ -66,10 +66,12 @@ describe('TimbradasService (base real)', () => {
     await crear('supervisor', 'SUPERVISOR', { regionId: region.id });
     await crear('admin', 'ADMIN');
     await crear('superAdmin', 'SUPER_ADMIN');
+    await crear('aprobador', 'APROBADOR', { agenciaId: agencia.id, regionId: region.id });
     for (const clave of Object.keys(ids)) actores[clave] = await env.actor(ids[clave]);
-    // Las casillas de timbrada las trae el rol: la base local aún no las tiene, así que se fijan aquí. ADMIN y SUPER_ADMIN timban sin obligación.
+    // Las casillas de timbrada las trae el rol: la base local aún no las tiene, así que se fijan aquí. El APROBADOR timbra sin obligación.
     for (const clave of Object.keys(actores)) {
-      const voluntaria = ['admin', 'superAdmin'].includes(clave);
+      if (clave === 'admin' || clave === 'superAdmin') continue; // los administradores no timbran: conservan las capacidades de su rol
+      const voluntaria = clave === 'aprobador';
       actores[clave].roleDetails = { ...actores[clave].roleDetails, capacidades: voluntaria ? ['rrhh.timbrar'] : ['rrhh.timbrar', 'rrhh.timbrada.obligatoria'] };
     }
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -211,20 +213,21 @@ describe('TimbradasService (base real)', () => {
     }
   });
 
-  it('ADMIN y SUPER_ADMIN timban sin obligación: sin ventana, la primera marca es Entrada y la segunda Salida', async () => {
+  it('El APROBADOR timbra sin obligación: sin ventana, la primera marca es Entrada y la segunda Salida', async () => {
     a(new Date('2031-03-12T16:30:00Z')); // 11:30: fuera de toda ventana, pero para quien no está obligado no hay ventana
-    const estado = await service.estado(actores.admin);
+    const estado = await service.estado(actores.aprobador);
     expect(estado).toMatchObject({ obligatoria: false, ventanas: null, tipoActual: 'ENTRADA', puedeTimbrar: true });
-    expect(await marcar('admin')).toMatchObject({ tipo: 'ENTRADA', verificacion: 'VERIFICADA' });
+    expect(await marcar('aprobador')).toMatchObject({ tipo: 'ENTRADA', verificacion: 'VERIFICADA' });
     a(new Date('2031-03-12T20:30:00Z'));
-    expect(await marcar('admin')).toMatchObject({ tipo: 'SALIDA' });
-    await expect(marcar('admin')).rejects.toThrow('Ya registraste tu entrada y tu salida de hoy.');
+    expect(await marcar('aprobador')).toMatchObject({ tipo: 'SALIDA' });
+    await expect(marcar('aprobador')).rejects.toThrow('Ya registraste tu entrada y tu salida de hoy.');
     expect(await service.estado(actores.lavador)).toMatchObject({ obligatoria: true });
     // Su día queda «Registrado»: solo la hora de las marcas y los minutos respecto a su horario, sin atraso ni alertas.
-    const mias = await service.mias({ desde: '2031-03-12', hasta: '2031-03-12' }, actores.admin);
+    const mias = await service.mias({ desde: '2031-03-12', hasta: '2031-03-12' }, actores.aprobador);
     expect(mias.evaluacion).toEqual([expect.objectContaining({ dia: '2031-03-12', estado: 'REGISTRADO', entradaReal: '11:30', salidaReal: '15:30', minutosEntrada: 210 })]);
-    // Sin marcas, el día aparece como «No obligatorio timbrar».
-    const sinMarcas = await service.mias({ desde: '2031-03-13', hasta: '2031-03-13' }, actores.superAdmin);
+    // Sin marcas, el día aparece como «No obligatorio timbrar» (ya pasó: el reloj de la prueba avanza un día).
+    a(new Date('2031-03-14T16:30:00Z'));
+    const sinMarcas = await service.mias({ desde: '2031-03-13', hasta: '2031-03-13' }, actores.aprobador);
     expect(sinMarcas.evaluacion).toEqual([expect.objectContaining({ dia: '2031-03-13', estado: 'NO_OBLIGATORIO' })]);
   });
 

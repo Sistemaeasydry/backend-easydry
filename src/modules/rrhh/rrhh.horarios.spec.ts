@@ -185,7 +185,12 @@ describe('evaluarDia', () => {
 
   it('día libre y días sin horario no se evalúan', () => {
     expect(evaluarDia({ dia: { ...DIA, trabaja: false }, ajuste: AJUSTE_POR_DEFECTO, entradaMin: null, salidaMin: null }).estado).toBe('DIA_LIBRE');
-    expect(evaluarDia({ dia: null, ajuste: null, entradaMin: h('08:00'), salidaMin: null }).estado).toBe('SIN_HORARIO');
+    expect(evaluarDia({ dia: null, ajuste: null, entradaMin: null, salidaMin: null }).estado).toBe('SIN_HORARIO');
+    // Sin horario pero con marca: se muestra el registro, sin juzgarlo (antes quedaba oculto y la timbrada «no salía»).
+    const conMarca = evaluarDia({ dia: null, ajuste: null, entradaMin: null, salidaMin: h('13:58') });
+    expect(conMarca.estado).toBe('REGISTRADO');
+    expect(conMarca.salidaReal).toBe('13:58');
+    expect(conMarca.observaciones).toEqual([]);
     expect(evaluarDia({ dia: DIA, ajuste: null, entradaMin: null, salidaMin: null }).estado).toBe('SIN_HORARIO');
   });
 });

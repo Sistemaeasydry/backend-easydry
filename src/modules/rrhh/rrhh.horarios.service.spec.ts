@@ -125,11 +125,11 @@ describe('HorariosService (base real)', () => {
     await env.esperar(() => env.prisma.notification.findFirst({ where: de(ids.admin, '2032-06-15:SIN_MARCA') }));
     expect(await service.revisarIncidencias(new Date('2032-06-15T15:35:00Z'), soloPrueba)).toBe(0); // no repite
 
-    // con entrada y sin salida, ya pasada la ventana de la salida (17:00)
+    // con entrada y sin salida, ya pasada la ventana de la salida (17:00 más 2 h = 19:00)
     await env.prisma.timbrada.create({
       data: { userId: ids.lavador2, tipo: 'ENTRADA', fechaDia: new Date('2032-06-16T00:00:00Z'), marcadaEn: new Date('2032-06-16T13:10:00Z'), origen: 'APP', fotoKey: `${env.marca}-f`, verificacion: 'SIN_VERIFICAR' },
     });
-    expect(await service.revisarIncidencias(new Date('2032-06-16T22:30:00Z'), soloPrueba)).toBe(1);
+    expect(await service.revisarIncidencias(new Date('2032-06-17T01:30:00Z'), soloPrueba)).toBe(1);
     expect((await env.prisma.notification.findFirst({ where: de(ids.lavador2, '2032-06-16:ENTRADA_SIN_SALIDA') }))?.titulo).toBe('Entrada sin salida');
   });
 
