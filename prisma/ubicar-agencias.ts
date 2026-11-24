@@ -19,6 +19,7 @@
  *   --incluir-aproximadas                                con --con-ubicacion, guarda también calles y sectores (no recomendado)
  *   --sobrescribir                                       reemplaza dirección y ubicación aunque la agencia ya las tenga
  *   --sin-red                                            no consulta OpenStreetMap: solo une el Excel con las agencias
+ *   --solo-direcciones                                   solo direcciones (implica --sin-red): ni lee ni escribe latitud/longitud, para una base que aún no tiene esas columnas
  *
  * Solo corre contra una base en localhost, salvo que se pase IMPORT_REMOTO=SI.
  */
@@ -35,7 +36,8 @@ const APLICAR = args.includes('--aplicar');
 const CON_UBICACION = args.includes('--con-ubicacion');
 const APROXIMADAS = args.includes('--incluir-aproximadas');
 const SOBRESCRIBIR = args.includes('--sobrescribir');
-const SIN_RED = args.includes('--sin-red');
+const SOLO_DIRECCIONES = args.includes('--solo-direcciones');
+const SIN_RED = args.includes('--sin-red') || SOLO_DIRECCIONES;
 const XLSX_PATH = path.resolve(args.find((a) => !a.startsWith('--')) ?? path.join(__dirname, '..', '..', 'DIRECCIONES DE AGENCIAS.xlsx'));
 
 if (process.env.IMPORT_REMOTO !== 'SI' && !/@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? '')) {
@@ -211,7 +213,9 @@ async function main() {
     fs.rmSync(raiz, { recursive: true, force: true });
   }
 
-  const agencias = await prisma.agencia.findMany({ select: { id: true, nombre: true, direccion: true, latitud: true, longitud: true } });
+  const agencias: Array<{ id: string; nombre: string; direccion: string | null; latitud: number | null; longitud: number | null }> = SOLO_DIRECCIONES
+    ? (await prisma.agencia.findMany({ select: { id: true, nombre: true, direccion: true } })).map((a) => ({ ...a, latitud: null, longitud: null }))
+    : await prisma.agencia.findMany({ select: { id: true, nombre: true, direccion: true, latitud: true, longitud: true } });
   const porNombre = new Map<string, typeof agencias[number][]>();
   for (const a of agencias) porNombre.set(clave(a.nombre), [...(porNombre.get(clave(a.nombre)) ?? []), a]);
 
@@ -305,13 +309,14 @@ async function main() {
     const a = r.agencia!;
     const data: { direccion?: string; latitud?: number; longitud?: number } = {};
     if (r.f.direccion && (SOBRESCRIBIR || !a.direccion)) data.direccion = r.f.direccion;
-    const guardable = CON_UBICACION && r.h && (r.h.calidad === 'LUGAR' || APROXIMADAS);
+    const guardable = !SOLO_DIRECCIONES && CON_UBICACION && r.h && (r.h.calidad === 'LUGAR' || APROXIMADAS);
     if (guardable && (SOBRESCRIBIR || a.latitud === null || a.longitud === null)) {
       data.latitud = r.h!.lat;
       data.longitud = r.h!.lng;
     }
     if (!Object.keys(data).length) continue;
-    await prisma.agencia.update({ where: { id: a.id }, data });
+    // updateMany y no update: update pide de vuelta la fila completa (con latitud y longitud), que una base sin migrar no tiene.
+    await prisma.agencia.updateMany({ where: { id: a.id }, data });
     if (data.direccion) dirs++;
     if (data.latitud !== undefined) ubic++;
   }
