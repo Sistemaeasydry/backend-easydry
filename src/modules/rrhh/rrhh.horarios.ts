@@ -25,10 +25,11 @@ export const HORARIO_POR_DEFECTO: SemanaHorario = Array.from({ length: DIAS_SEMA
 /** Horario por defecto anterior (08:00 a 15:00): rigió hasta el día anterior a `HORARIO_POR_DEFECTO_DESDE`. */
 export const HORARIO_POR_DEFECTO_ANTERIOR: SemanaHorario = Array.from({ length: DIAS_SEMANA }, () => ({ trabaja: true, entrada: '08:00', salida: '15:00' }));
 /**
- * Primer día en que rige el horario por defecto de 08:00 a 17:00. Los días anteriores se siguen evaluando con 08:00 a 15:00: un cambio
- * de horario solo rige hacia adelante y nunca reevalúa lo ya evaluado.
+ * Primer día en que rige el horario por defecto de 08:00 a 17:00 (desde antes de que existiera RRHH en producción: en la práctica rige
+ * siempre). Los días anteriores, que solo existen en bases de desarrollo, se siguen evaluando con 08:00 a 15:00: un cambio de horario
+ * solo rige hacia adelante y nunca reevalúa lo ya evaluado.
  */
-export const HORARIO_POR_DEFECTO_DESDE = '2026-11-24';
+export const HORARIO_POR_DEFECTO_DESDE = '2026-11-01';
 /** El horario por defecto que regía ese día (AAAA-MM-DD). */
 export const horarioPorDefectoDe = (dia: string): SemanaHorario => (dia >= HORARIO_POR_DEFECTO_DESDE ? HORARIO_POR_DEFECTO : HORARIO_POR_DEFECTO_ANTERIOR);
 

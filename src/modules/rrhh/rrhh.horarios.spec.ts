@@ -31,7 +31,8 @@ describe('horario por defecto y validaciones', () => {
   it('el 08:00 a 17:00 rige solo hacia adelante: los días anteriores a su fecha siguen con 08:00 a 15:00', () => {
     expect(horarioPorDefectoDe(HORARIO_POR_DEFECTO_DESDE)).toBe(HORARIO_POR_DEFECTO);
     expect(horarioPorDefectoDe('2031-03-10')).toBe(HORARIO_POR_DEFECTO);
-    expect(horarioPorDefectoDe('2026-11-23')).toBe(HORARIO_POR_DEFECTO_ANTERIOR);
+    expect(horarioPorDefectoDe('2026-11-23')).toBe(HORARIO_POR_DEFECTO); // hoy ya es 08:00 a 17:00
+    expect(horarioPorDefectoDe('2026-10-31')).toBe(HORARIO_POR_DEFECTO_ANTERIOR);
     expect(HORARIO_POR_DEFECTO_ANTERIOR.every((d) => d.entrada === '08:00' && d.salida === '15:00')).toBe(true);
   });
 
