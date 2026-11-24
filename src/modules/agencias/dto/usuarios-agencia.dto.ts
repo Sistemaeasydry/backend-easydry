@@ -155,10 +155,15 @@ export class AsignarPasswordDto {
   @IsNotEmpty({ message: 'El ID de usuario es obligatorio' })
   id: string;
 
-  @ApiProperty({ example: 'Lavado#2026Seco', description: 'Nueva contraseña (mín. 10 caracteres, con mayúscula, minúscula, número y carácter especial)' })
+  @ApiProperty({ example: 'Lavado#2026Seco', description: 'Nueva contraseña (mín. 8 caracteres)' })
   @IsString()
   @IsNotEmpty({ message: 'La contraseña es obligatoria' })
   password: string;
+
+  @ApiPropertyOptional({ description: 'Repetición de la contraseña: si se envía, debe ser igual a la contraseña' })
+  @IsOptional()
+  @IsString()
+  passwordConfirmacion?: string;
 }
 
 /** Datos de la persona que edita Talento Humano: nunca contraseña, rol, estado ni agencia. */
@@ -291,6 +296,11 @@ export class UpdateUsuarioDto {
   @IsString()
   password?: string;
 
+  @ApiPropertyOptional({ description: 'Repetición de la contraseña: si se envía, debe ser igual a la contraseña' })
+  @IsOptional()
+  @IsString()
+  passwordConfirmacion?: string;
+
   @ApiPropertyOptional({ example: 'MOVIL', description: 'Modalidad de operador especial: FIJO o MOVIL' })
   @IsOptional()
   @IsString()
@@ -344,6 +354,11 @@ export class CreateUsuarioDto {
   @IsString()
   @IsNotEmpty({ message: 'La contraseña es obligatoria' })
   password: string;
+
+  @ApiPropertyOptional({ description: 'Repetición de la contraseña: si se envía, debe ser igual a la contraseña' })
+  @IsOptional()
+  @IsString()
+  passwordConfirmacion?: string;
 
   @ApiPropertyOptional({ example: 1, description: '1 = Activo, 0 = Inactivo' })
   @IsOptional()
@@ -439,10 +454,15 @@ export class CreateOperadorDto {
   @IsNotEmpty({ message: 'El nombre completo es obligatorio' })
   nombre: string;
 
-  @ApiProperty({ example: 'Lavado#2026Seco', description: 'Contraseña inicial (mín. 10 caracteres, con mayúscula, minúscula, número y carácter especial)' })
+  @ApiProperty({ example: 'Lavado#2026Seco', description: 'Contraseña inicial (mín. 8 caracteres)' })
   @IsString()
   @IsNotEmpty({ message: 'La contraseña es obligatoria' })
   password: string;
+
+  @ApiPropertyOptional({ description: 'Repetición de la contraseña: si se envía, debe ser igual a la contraseña' })
+  @IsOptional()
+  @IsString()
+  passwordConfirmacion?: string;
 
   @ApiPropertyOptional({ example: '1723456789' })
   @IsOptional()

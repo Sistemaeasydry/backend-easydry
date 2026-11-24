@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { exigirPasswordSegura } from '../../common/utils/password-politica.js';
+import { exigirConfirmacion, exigirPasswordSegura } from '../../common/utils/password-politica.js';
 import { CryptoService } from '../../common/crypto/crypto.service.js';
 import { CrearSelloDto, EditarSelloDto } from './dto/sellos.dto.js';
 import { MAX_LOGO_CARACTERES, esImagenDataUrl } from './informes.reglas.js';
@@ -83,6 +83,7 @@ export class SellosService {
     const apellido = texto(dto.apellido);
     if (!nombre || !apellido) throw new BadRequestException('El nombre y el apellido son obligatorios.');
     exigirPasswordSegura(dto.password);
+    exigirConfirmacion(dto.password, dto.passwordConfirmacion);
     const logo = this.crypto.protegerEnReposo(this.validarLogo(dto.logo));
     await this.exigirNombreLibre(nombre, apellido);
     const creado = await this.prisma.selloJefeTaller.create({
@@ -104,6 +105,7 @@ export class SellosService {
     if (dto.estado !== undefined) data.estado = dto.estado;
     if (dto.password) {
       exigirPasswordSegura(dto.password);
+      exigirConfirmacion(dto.password, dto.passwordConfirmacion);
       data.passwordHash = await bcrypt.hash(dto.password, 10);
       // Con una contraseña nueva se levanta el bloqueo por intentos fallidos.
       data.intentosFallidos = 0;

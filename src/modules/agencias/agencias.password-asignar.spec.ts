@@ -93,9 +93,9 @@ describe('asignar contraseña a un usuario (base real)', () => {
     expect(constancia[0]).toMatchObject({ rol: 'ADMIN', regla: 'ADMIN' });
   });
 
-  it('rechaza una contraseña débil (sin carácter especial, corta, común…) y no cambia nada', async () => {
+  it('rechaza una contraseña de menos de 8 caracteres y no cambia nada', async () => {
     const antes = await claveDe(ids.lav2);
-    for (const debil of ['Lavado2026Seco', 'corta#1A', 'Password#9x7Z', 'Taller#1234Zq']) {
+    for (const debil of ['corta12', 'Ab#1', '1234567']) {
       await expect(service.asignarPassword({ id: ids.lav2, password: debil }, actor('ADMIN', 'GLOBAL')), debil).rejects.toBeInstanceOf(BadRequestException);
     }
     await expect(service.asignarPassword({ id: ids.lav2, password: '   ' }, actor('ADMIN', 'GLOBAL'))).rejects.toBeInstanceOf(BadRequestException);
@@ -175,7 +175,7 @@ describe('asignar contraseña a un usuario (base real)', () => {
 
   it('desde el formulario de edición la contraseña sigue las mismas reglas (política, permiso, zona y propia)', async () => {
     const antes = await claveDe(ids.lav1);
-    await expect(service.updateUsuario({ id: ids.lav1, password: 'Lavado2026Seco' } as any, actor('ADMIN', 'GLOBAL'))).rejects.toThrow(/carácter especial/);
+    await expect(service.updateUsuario({ id: ids.lav1, password: 'corta12' } as any, actor('ADMIN', 'GLOBAL'))).rejects.toThrow(/al menos 8 caracteres/);
     await expect(service.updateUsuario({ id: ids.lav1, password: NUEVA } as any, actor('ADMIN', 'GLOBAL', {}, ['usuarios.usuarios.editar']))).rejects.toThrow(/no tiene permiso/);
     await expect(service.updateUsuario({ id: ids.lav3, password: NUEVA } as any, actor('SUPERVISOR', 'REGION', { id: ids.sup1, regionId: ids.r1 }, [PERMISO, 'usuarios.usuarios.editar']))).rejects.toThrow(/no pertenece a tu zona/);
     expect(await claveDe(ids.lav1)).toBe(antes);

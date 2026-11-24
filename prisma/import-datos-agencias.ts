@@ -23,7 +23,7 @@ const DATA_PATH = path.join(__dirname, 'data', 'datos-agencias.json');
 function passwordInicial(): string {
   const valor = process.env.IMPORT_PASSWORD_INICIAL?.trim();
   if (!valor) throw new Error('Define IMPORT_PASSWORD_INICIAL en el .env o en el entorno.');
-  // Misma política que cualquier contraseña del sistema (10+ caracteres, mayúscula, minúscula, número y carácter especial).
+  // Misma política que cualquier contraseña del sistema (8 o más caracteres).
   const motivo = motivoPasswordDebil(valor);
   if (motivo) throw new Error(`IMPORT_PASSWORD_INICIAL no cumple la política de contraseñas: ${motivo}`);
   return valor;

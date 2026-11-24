@@ -142,11 +142,10 @@ describe('Gestión de Lavadores: permisos por botón (base real)', () => {
       env.rastrear('User', creado.id);
     });
 
-    it('la contraseña es obligatoria y debe cumplir la política (mayúscula, minúscula, número y carácter especial)', async () => {
+    it('la contraseña es obligatoria y debe tener al menos 8 caracteres', async () => {
       const base = { nombre: 'Sin Clave', cedula: '0977777777', rol: 'LAVADOR', agenciaId: agencia.id } as any;
       await expect(service.createOperador(base, admin.id, con('operadores.registrar'))).rejects.toBeInstanceOf(BadRequestException);
-      await expect(service.createOperador({ ...base, password: 'Lavado2026Seco' }, admin.id, con('operadores.registrar'))).rejects.toThrow(/carácter especial/);
-      await expect(service.createOperador({ ...base, password: 'corta#1A' }, admin.id, con('operadores.registrar'))).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.createOperador({ ...base, password: 'corta12' }, admin.id, con('operadores.registrar'))).rejects.toThrow(/al menos 8 caracteres/);
       expect(await env.prisma.user.count({ where: { email: 'op.0977777777@easydry.internal' } })).toBe(0);
     });
   });

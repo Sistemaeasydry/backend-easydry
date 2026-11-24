@@ -81,7 +81,7 @@ import { FUNCION, funcionesDeRol, rolConFuncion, tieneFuncion, type CodigoFuncio
 const conFuncion = (u: any, f: CodigoFuncion): boolean => funcionesDeRol(u?.role?.capacidades, u?.role?.namerol).has(f);
 import { idsServiciosRetoque } from '../../common/utils/retoque-catalogo.js';
 import { tieneAlgunPermiso, tienePermiso } from '../../common/permisos/capacidades.js';
-import { exigirPasswordSegura } from '../../common/utils/password-politica.js';
+import { exigirConfirmacion, exigirPasswordSegura } from '../../common/utils/password-politica.js';
 import { CacheService } from '../../common/cache/cache.service.js';
 import { USUARIO_PREFIJO } from '../auth/jwt.strategy.js';
 import { personaEnAlcance } from '../rrhh/rrhh.reglas.js';
@@ -160,7 +160,7 @@ export class AgenciasService {
    * Asigna (o restablece) la contraseña de un usuario existente. Es el único camino para quien tiene SOLO el permiso de contraseñas: no
    * puede tocar ningún otro dato del usuario. Cierra las sesiones abiertas del usuario y deja constancia.
    */
-  async asignarPassword(dto: { id: string; password: string }, actor: any): Promise<{ ok: true }> {
+  async asignarPassword(dto: { id: string; password: string; passwordConfirmacion?: string }, actor: any): Promise<{ ok: true }> {
     const user = await this.prisma.user.findUnique({
       where: { id: dto.id },
       include: { role: true, agencia: { select: { regionId: true } }, bodega: { select: { regionId: true } } },
@@ -172,6 +172,7 @@ export class AgenciasService {
     const nueva = dto.password?.trim();
     if (!nueva) throw new BadRequestException('Escribe la nueva contraseña.');
     exigirPasswordSegura(nueva, user.email);
+    exigirConfirmacion(nueva, dto.passwordConfirmacion);
     this.asegurarPuedeAsignarPassword(actor, user);
 
     const ahora = new Date();
@@ -2488,6 +2489,7 @@ export class AgenciasService {
     const nuevaPassword = dto.password?.trim();
     if (nuevaPassword) {
       exigirPasswordSegura(nuevaPassword, user.email);
+      exigirConfirmacion(nuevaPassword, dto.passwordConfirmacion);
       this.asegurarPuedeAsignarPassword(actor, user);
     }
 
@@ -3039,6 +3041,7 @@ export class AgenciasService {
       throw new BadRequestException('La contraseña es obligatoria para crear el usuario.');
     }
     exigirPasswordSegura(passwordToHash, dto.email);
+    exigirConfirmacion(passwordToHash, dto.passwordConfirmacion);
     const passwordHash = await bcrypt.hash(passwordToHash, 10);
 
     let servicioIdsToSet = Array.isArray(dto.servicioIds)
@@ -3471,6 +3474,7 @@ export class AgenciasService {
     const passwordInicial = dto.password?.trim();
     if (!passwordInicial) throw new BadRequestException('La contraseña es obligatoria para registrar al operador.');
     exigirPasswordSegura(passwordInicial, emailToUse);
+    exigirConfirmacion(passwordInicial, dto.passwordConfirmacion);
     const passwordHash = await bcrypt.hash(passwordInicial, 10);
     const names = dto.nombre.trim().split(' ');
     const firstName = names[0] || 'Lavador';

@@ -7,6 +7,8 @@ export class CrearSelloDto {
   /** Logo como imagen en data URL (png, jpeg o webp). */
   @IsOptional() @IsString() logo?: string;
   @IsString() @MinLength(1) @MaxLength(100) password!: string;
+  /** Repetición de la contraseña: si se envía, debe ser igual. */
+  @IsOptional() @IsString() @MaxLength(100) passwordConfirmacion?: string;
   /** Agencias cuyos informes firma este sello. Una agencia tiene un solo sello: si ya tenía otro, pasa a este. */
   @IsOptional() @IsArray() @ArrayMaxSize(500) @IsUUID('all', { each: true }) agenciaIds?: string[];
 }
@@ -19,6 +21,8 @@ export class EditarSelloDto {
   @IsOptional() @IsString() logo?: string;
   /** Contraseña nueva; sin ella se conserva la actual. */
   @IsOptional() @IsString() @MinLength(1) @MaxLength(100) password?: string;
+  /** Repetición de la contraseña nueva: si se envía, debe ser igual. */
+  @IsOptional() @IsString() @MaxLength(100) passwordConfirmacion?: string;
   @IsOptional() @IsInt() @IsIn([0, 1]) estado?: number;
   /** Lista completa de agencias del sello: las que no estén quedan sin sello. Sin este campo no se tocan. */
   @IsOptional() @IsArray() @ArrayMaxSize(500) @IsUUID('all', { each: true }) agenciaIds?: string[];

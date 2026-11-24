@@ -3,50 +3,22 @@ import { exigirPasswordSegura, motivoPasswordDebil, PASSWORD_MENSAJE } from './p
 import { tokenRevocado } from '../../modules/auth/jwt.strategy.js';
 
 describe('política de contraseñas', () => {
-  it.each(['Lavado#2026Seco', 'Taller*Norte84', 'Cera.Pulida_77x', 'Ñandú$Verde2026'])('acepta %s', (clave) => {
+  it.each(['12345678', 'lavadoseco', 'LAVADOSECO', 'Lavado#2026Seco', 'Ñandú$Verde', 'password', 'con espacios dentro'])('acepta %s (solo cuenta el largo)', (clave) => {
     expect(motivoPasswordDebil(clave)).toBeNull();
   });
 
-  it.each([
-    ['sin carácter especial', 'Lavado2026Seco'],
-    ['sin mayúscula', 'lavado#2026seco'],
-    ['sin minúscula', 'LAVADO#2026SECO'],
-    ['sin número', 'Lavado#SecoLimpio'],
-    ['demasiado corta', 'Ab1#xyz'],
-    ['solo letras y símbolos', 'Lavado#Seco#Limpio'],
-  ])('rechaza una contraseña %s', (_motivo, clave) => {
+  it.each(['', 'a', 'Ab1#xyz', '1234567'])('rechaza "%s" por corta', (clave) => {
     expect(motivoPasswordDebil(clave)).toBe(PASSWORD_MENSAJE);
   });
 
-  it('el mínimo es de 10 caracteres: con 9 no pasa y con 10 sí', () => {
-    expect(motivoPasswordDebil('Lavad#2026')).toBeNull(); // 10
-    expect(motivoPasswordDebil('Lava#2026')).not.toBeNull(); // 9
-  });
-
-  it('no admite espacios al inicio o al final, pero sí dentro', () => {
-    expect(motivoPasswordDebil(' Lavado#2026Seco')).toMatch(/espacios/);
-    expect(motivoPasswordDebil('Lavado#2026Seco ')).toMatch(/espacios/);
-    expect(motivoPasswordDebil('Lavado #2026 Seco')).toBeNull();
-  });
-
-  it('rechaza palabras comunes y el propio correo', () => {
-    expect(motivoPasswordDebil('Password#9x7Z')).toMatch(/común/);
-    expect(motivoPasswordDebil('Maria.Perez#2026X', 'maria.perez@easydry.com')).toMatch(/correo/);
-  });
-
-  it('rechaza secuencias obvias y caracteres repetidos', () => {
-    expect(motivoPasswordDebil('Tallerx#1234Zq')).toMatch(/secuencias/);
-    expect(motivoPasswordDebil('Tallerx#9876Zq')).toMatch(/secuencias/);
-    expect(motivoPasswordDebil('Zabcd#Tallero5')).toMatch(/secuencias/);
-    expect(motivoPasswordDebil('Taller#5Zqaaaa')).toMatch(/secuencias/);
-    // Tres seguidas y números separados sí valen.
-    expect(motivoPasswordDebil('Taller#5Zqaaa9')).toBeNull();
-    expect(motivoPasswordDebil('Taller#1x2Y3z4')).toBeNull();
+  it('el mínimo es de 8 caracteres: con 7 no pasa y con 8 sí', () => {
+    expect(motivoPasswordDebil('abcdefgh')).toBeNull(); // 8
+    expect(motivoPasswordDebil('abcdefg')).not.toBeNull(); // 7
   });
 
   it('exigirPasswordSegura lanza 400 con el motivo', () => {
     expect(() => exigirPasswordSegura('debil')).toThrow(PASSWORD_MENSAJE);
-    expect(() => exigirPasswordSegura('Lavado#2026Seco')).not.toThrow();
+    expect(() => exigirPasswordSegura('cualquiera')).not.toThrow();
   });
 });
 
