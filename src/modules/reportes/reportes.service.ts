@@ -1458,7 +1458,8 @@ export class ReportesService {
       where: {
         fechaProgramada: { gte: diaComoFecha(ctx.rango.desde), lte: diaComoFecha(ctx.rango.hasta) },
         ...(ctx.dto.estado ? { estado: ctx.dto.estado } : {}),
-        persona: this.personasEnAlcance(ctx),
+        // Entrega a una persona (en su alcance) o a una agencia completa (sin persona, de una agencia en el alcance).
+        OR: [{ persona: this.personasEnAlcance(ctx) }, { personaId: null, agenciaId: { in: ctx.ids } }],
       },
       include: {
         plan: { select: { nombre: true } },
@@ -1467,6 +1468,8 @@ export class ReportesService {
       },
       orderBy: { fechaProgramada: 'asc' },
     });
+    const agenciasEntrega = await this.prisma.agencia.findMany({ where: { id: { in: unicos(entregas.filter((e) => !e.persona).map((e) => e.agenciaId)) } }, select: { id: true, nombre: true } });
+    const nombreAgencia = new Map(agenciasEntrega.map((a) => [a.id, a.nombre]));
     const entregadores = await this.prisma.user.findMany({ where: { id: { in: unicos(entregas.map((e) => e.entregadaPorId)) } }, select: { id: true, name: true, lastname: true } });
     const nombreEntregador = new Map(entregadores.map((u) => [u.id, nombreDe(u)]));
     return entregas.map((e) => ({
@@ -1474,9 +1477,9 @@ export class ReportesService {
       fecha: e.fechaProgramada.toISOString().slice(0, 10),
       fila: {
         fecha: e.fechaProgramada.toISOString().slice(0, 10),
-        persona: nombreDe(e.persona),
-        rol: titulo(e.persona.role?.namerol),
-        agencia: e.persona.agencia?.nombre ?? e.persona.bodega?.nombre ?? '',
+        persona: e.persona ? nombreDe(e.persona) : `Agencia completa${e.personasCubiertas ? ` (${e.personasCubiertas} personas)` : ''}`,
+        rol: e.persona ? titulo(e.persona.role?.namerol) : 'Agencia',
+        agencia: e.persona ? (e.persona.agencia?.nombre ?? e.persona.bodega?.nombre ?? '') : (nombreAgencia.get(e.agenciaId ?? '') ?? ''),
         plan: e.plan.nombre,
         productos: e.items.map((i) => `${i.producto.nombre} x${i.cantidadEntregada ?? i.cantidadPlan}`).join(', '),
         estado: titulo(e.estado),

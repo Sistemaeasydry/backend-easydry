@@ -1,9 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { diaComoFecha, fechaEnEcuador } from '../rrhh/rrhh.reglas.js';
+import { tienePermiso } from '../../common/permisos/capacidades.js';
 import {
+  agruparPorAgencia,
+  claveDestino,
   MAX_BYTES_EVIDENCIA_DOTACION,
   MAX_EVIDENCIAS_DOTACION,
   ocurrenciaVigente,
@@ -28,7 +31,7 @@ const dia = (d: Date) => d.toISOString().slice(0, 10);
 const INCLUIR_PLAN = { items: { include: { producto: { select: { nombre: true } } } } } satisfies Prisma.PlanDotacionInclude;
 
 const INCLUIR_ENTREGA = {
-  plan: { select: { id: true, nombre: true } },
+  plan: { select: { id: true, nombre: true, coordinadorId: true, modoEntrega: true } },
   persona: { select: { id: true, name: true, lastname: true, role: { select: { namerol: true } }, agencia: { select: { nombre: true } } } },
   items: { include: { producto: { select: { nombre: true, stock: true, categoria: { select: { nombre: true } } } } } },
   evidencias: { orderBy: { createdAt: 'asc' as const } },
@@ -129,8 +132,11 @@ export class DotacionesService {
 
   // ───────────────────────── Planes ─────────────────────────
 
-  private presentarPlan(p: PlanCompleto) {
+  private presentarPlan(p: PlanCompleto, coordinadores: Map<string, string> = new Map()) {
     return {
+      modoEntrega: p.modoEntrega,
+      coordinadorId: p.coordinadorId,
+      coordinador: p.coordinadorId ? (coordinadores.get(p.coordinadorId) ?? null) : null,
       id: p.id,
       nombre: p.nombre,
       tipo: p.tipo,
@@ -145,13 +151,42 @@ export class DotacionesService {
 
   async listarPlanes() {
     const planes = await this.prisma.planDotacion.findMany({ orderBy: [{ activo: 'desc' }, { createdAt: 'desc' }], include: INCLUIR_PLAN });
-    return planes.map((p) => this.presentarPlan(p));
+    const nombres = await this.nombresDeCoordinadores(planes.map((p) => p.coordinadorId));
+    return planes.map((p) => this.presentarPlan(p, nombres));
+  }
+
+  private async nombresDeCoordinadores(ids: Array<string | null>): Promise<Map<string, string>> {
+    const unicos = [...new Set(ids.filter((i): i is string => !!i))];
+    if (!unicos.length) return new Map();
+    const usuarios = await this.prisma.user.findMany({ where: { id: { in: unicos } }, select: { id: true, name: true, lastname: true } });
+    return new Map(usuarios.map((u) => [u.id, nombreDe(u)]));
+  }
+
+  /** Personas que pueden salir a entregar: las de un rol con el permiso de registrar entregas. */
+  async listarCoordinadores() {
+    const usuarios = await this.prisma.user.findMany({
+      where: { estado: 1, role: { OR: [{ capacidades: { has: 'dotaciones.entregar' } }, { namerol: 'SUPER_ADMIN' }] } },
+      select: { id: true, name: true, lastname: true, role: { select: { namerol: true } }, agencia: { select: { nombre: true } } },
+    });
+    return usuarios
+      .map((u) => ({ id: u.id, nombre: nombreDe(u), rol: u.role.namerol, agencia: u.agencia?.nombre ?? null }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  }
+
+  /** El coordinador de un plan debe existir, estar activo y poder registrar entregas. */
+  private async exigirCoordinadorValido(id: string) {
+    const c = await this.prisma.user.findUnique({ where: { id }, select: { estado: true, role: { select: { namerol: true, capacidades: true } } } });
+    if (!c || c.estado !== 1) throw new BadRequestException('El coordinador elegido no existe o está inactivo.');
+    if (c.role.namerol !== 'SUPER_ADMIN' && !c.role.capacidades.includes('dotaciones.entregar')) {
+      throw new BadRequestException('El coordinador elegido no tiene permiso para registrar entregas de dotación.');
+    }
   }
 
   async guardarPlan(dto: GuardarPlanDto, user: any) {
     const hoy = fechaEnEcuador(new Date()).dia;
     if (dto.tipo === 'FIJO' && !dto.cadaMeses) throw new BadRequestException('Indica cada cuántos meses se repite.');
     if (dto.tipo === 'OCASIONAL' && dto.fechaInicio < hoy) throw new BadRequestException('Una entrega ocasional debe tener fecha de hoy o futura.');
+    await this.exigirCoordinadorValido(dto.coordinadorId);
     const roles = [...new Set(dto.roles.filter((r) => !ROLES_SIN_DOTACION.includes(r)))];
     const productos = [...new Set(dto.items.map((i) => i.productoId))];
     if (productos.length !== dto.items.length) throw new BadRequestException('Un producto solo puede aparecer una vez en el plan.');
@@ -164,6 +199,8 @@ export class DotacionesService {
       cadaMeses: dto.tipo === 'FIJO' ? dto.cadaMeses! : null,
       roles,
       agenciasIds: dto.agenciasIds,
+      modoEntrega: dto.modoEntrega,
+      coordinadorId: dto.coordinadorId,
     };
     const items = dto.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad }));
     const plan = await this.prisma.$transaction(async (tx) => {
@@ -177,7 +214,7 @@ export class DotacionesService {
       return tx.planDotacion.create({ data: { ...data, creadoPorId: String(user.id), items: { create: items } }, include: INCLUIR_PLAN });
     });
     await this.generarEntregasDePlan(plan.id);
-    return this.presentarPlan(plan);
+    return this.presentarPlan(plan, await this.nombresDeCoordinadores([plan.coordinadorId]));
   }
 
   async estadoPlan(dto: EstadoPlanDto) {
@@ -208,16 +245,28 @@ export class DotacionesService {
     const elegibles = personas.filter((p) => personaEnPlan(plan, { rol: p.role.namerol, agenciaId: p.agenciaId }));
     const fecha = diaComoFecha(ocurrencia);
     let creadas = 0;
-    for (const p of elegibles) {
+    // Un destino por persona o, en modo AGENCIA, uno por agencia (con las cantidades del plan por cada persona que la integra).
+    const destinos =
+      plan.modoEntrega === 'AGENCIA'
+        ? [...agruparPorAgencia(elegibles)].map(([agenciaId, grupo]) => ({
+            personaId: null as string | null,
+            clave: claveDestino(grupo[0], agenciaId, 'AGENCIA'),
+            agenciaId: agenciaId as string | null,
+            regionId: grupo[0].regionId,
+            personas: grupo.length,
+          }))
+        : elegibles.map((p) => ({ personaId: p.id as string | null, clave: p.id, agenciaId: p.agenciaId, regionId: p.regionId, personas: 1 }));
+    for (const d of destinos) {
       const ya = await this.prisma.entregaDotacion.findUnique({
-        where: { planId_personaId_fechaProgramada: { planId, personaId: p.id, fechaProgramada: fecha } },
+        where: { planId_claveDestino_fechaProgramada: { planId, claveDestino: d.clave, fechaProgramada: fecha } },
         select: { id: true },
       });
       if (ya) continue;
       await this.prisma.entregaDotacion.create({
         data: {
-          planId, personaId: p.id, fechaProgramada: fecha, agenciaId: p.agenciaId, regionId: p.regionId,
-          items: { create: plan.items.map((i) => ({ productoId: i.productoId, cantidadPlan: i.cantidad })) },
+          planId, personaId: d.personaId, claveDestino: d.clave, fechaProgramada: fecha, agenciaId: d.agenciaId, regionId: d.regionId,
+          personasCubiertas: plan.modoEntrega === 'AGENCIA' ? d.personas : null,
+          items: { create: plan.items.map((i) => ({ productoId: i.productoId, cantidadPlan: i.cantidad * d.personas })) },
         },
       });
       creadas++;
@@ -241,15 +290,20 @@ export class DotacionesService {
 
   // ───────────────────────── Entregas ─────────────────────────
 
-  private presentarEntrega(e: EntregaCompleta) {
+  private presentarEntrega(e: EntregaCompleta, agencias: Map<string, string> = new Map(), coordinadores: Map<string, string> = new Map()) {
     return {
       id: e.id,
       planId: e.planId,
       plan: e.plan.nombre,
+      modo: e.persona ? 'PERSONAS' : 'AGENCIA',
+      coordinador: e.plan.coordinadorId ? (coordinadores.get(e.plan.coordinadorId) ?? null) : null,
       personaId: e.personaId,
-      persona: apellidosNombres(e.persona),
-      rol: e.persona.role.namerol,
-      agencia: e.persona.agencia?.nombre ?? null,
+      persona: e.persona ? apellidosNombres(e.persona) : `Agencia ${agencias.get(e.agenciaId ?? '') ?? '—'}`,
+      personasCubiertas: e.personasCubiertas,
+      rol: e.persona ? e.persona.role.namerol : 'AGENCIA',
+      agencia: e.persona ? (e.persona.agencia?.nombre ?? null) : (agencias.get(e.agenciaId ?? '') ?? null),
+      recibeNombre: e.recibeNombre,
+      firmada: !!e.firmaRecibe,
       fechaProgramada: dia(e.fechaProgramada),
       estado: e.estado,
       entregadaEn: e.entregadaEn,
@@ -262,15 +316,48 @@ export class DotacionesService {
     };
   }
 
-  async listarEntregas(dto: ListarEntregasDto) {
+  /** Quien gestiona dotaciones ve y registra todas las entregas; un coordinador solo las de los planes que se le asignaron. */
+  private veTodas(user: any): boolean {
+    return tienePermiso(user, 'dotaciones.gestionar');
+  }
+
+  private async presentarEntregas(lista: EntregaCompleta[]) {
+    const agenciaIds = [...new Set(lista.map((e) => e.agenciaId).filter((a): a is string => !!a))];
+    const agencias = new Map(
+      (agenciaIds.length ? await this.prisma.agencia.findMany({ where: { id: { in: agenciaIds } }, select: { id: true, nombre: true } }) : []).map((a) => [a.id, a.nombre]),
+    );
+    const coordinadores = await this.nombresDeCoordinadores(lista.map((e) => e.plan.coordinadorId));
+    return lista.map((e) => this.presentarEntrega(e, agencias, coordinadores));
+  }
+
+  async listarEntregas(dto: ListarEntregasDto, user: any) {
     const buscar = dto.buscar?.trim();
     const where: Prisma.EntregaDotacionWhereInput = {
+      ...(this.veTodas(user) ? {} : { plan: { coordinadorId: String(user.id) } }),
       ...(dto.estado ? { estado: dto.estado } : {}),
       ...(dto.planId ? { planId: dto.planId } : {}),
       ...(buscar ? { persona: { OR: [{ name: { contains: buscar, mode: 'insensitive' } }, { lastname: { contains: buscar, mode: 'insensitive' } }] } } : {}),
     };
     const lista = await this.prisma.entregaDotacion.findMany({ where, include: INCLUIR_ENTREGA, orderBy: [{ fechaProgramada: 'asc' }, { createdAt: 'asc' }], take: 500 });
-    return lista.map((e) => this.presentarEntrega(e));
+    return this.presentarEntregas(lista);
+  }
+
+  /** La firma de quien recibió (imagen pesada: no viaja en el listado). */
+  async firmaDeEntrega(entregaId: string, user: any) {
+    const e = await this.prisma.entregaDotacion.findUnique({ where: { id: entregaId }, select: { recibeNombre: true, firmaRecibe: true, plan: { select: { coordinadorId: true } } } });
+    if (!e) throw new NotFoundException('La entrega no existe.');
+    this.exigirAcceso(e.plan.coordinadorId, user);
+    return { recibeNombre: e.recibeNombre, firma: e.firmaRecibe };
+  }
+
+  private exigirAcceso(coordinadorId: string | null, user: any): void {
+    if (this.veTodas(user) || coordinadorId === String(user.id)) return;
+    throw new ForbiddenException('Esta entrega está asignada a otro coordinador.');
+  }
+
+  private async entregaRegistrada(id: string) {
+    const e = await this.prisma.entregaDotacion.findUniqueOrThrow({ where: { id }, include: INCLUIR_ENTREGA });
+    return (await this.presentarEntregas([e]))[0];
   }
 
   private async prepararEvidencias(dto: RegistrarEntregaDto, userId: string) {
@@ -292,6 +379,11 @@ export class DotacionesService {
 
   async registrarEntrega(dto: RegistrarEntregaDto, user: any) {
     const userId = String(user.id);
+    const recibeNombre = dto.recibeNombre.trim();
+    if (recibeNombre.length < 3) throw new BadRequestException('Escribe el nombre de quien recibe.');
+    const previa = await this.prisma.entregaDotacion.findUnique({ where: { id: dto.entregaId }, select: { plan: { select: { coordinadorId: true } } } });
+    if (!previa) throw new NotFoundException('La entrega no existe.');
+    this.exigirAcceso(previa.plan.coordinadorId, user);
     const evidencias = await this.prepararEvidencias(dto, userId);
     await this.prisma.$transaction(async (tx) => {
       const entrega = await tx.entregaDotacion.findUnique({ where: { id: dto.entregaId }, include: { items: { include: { producto: { select: { nombre: true } } } } } });
@@ -317,16 +409,16 @@ export class DotacionesService {
       await tx.entregaDotacionEvidencia.createMany({ data: evidencias.map((e) => ({ ...e, entregaId: entrega.id })) });
       await tx.entregaDotacion.update({
         where: { id: entrega.id },
-        data: { estado: 'ENTREGADA', entregadaEn: new Date(), entregadaPorId: userId, nota: dto.nota?.trim() || null },
+        data: { estado: 'ENTREGADA', entregadaEn: new Date(), entregadaPorId: userId, nota: dto.nota?.trim() || null, recibeNombre, firmaRecibe: dto.firmaRecibe },
       });
     });
-    const e = await this.prisma.entregaDotacion.findUniqueOrThrow({ where: { id: dto.entregaId }, include: INCLUIR_ENTREGA });
-    return this.presentarEntrega(e);
+    return this.entregaRegistrada(dto.entregaId);
   }
 
   async omitirEntrega(dto: OmitirEntregaDto, user: any) {
-    const entrega = await this.prisma.entregaDotacion.findUnique({ where: { id: dto.entregaId } });
+    const entrega = await this.prisma.entregaDotacion.findUnique({ where: { id: dto.entregaId }, include: { plan: { select: { coordinadorId: true } } } });
     if (!entrega) throw new NotFoundException('La entrega no existe.');
+    this.exigirAcceso(entrega.plan.coordinadorId, user);
     if (entrega.estado !== 'PENDIENTE') throw new BadRequestException('Solo se puede omitir una entrega pendiente.');
     await this.prisma.entregaDotacion.update({
       where: { id: dto.entregaId },

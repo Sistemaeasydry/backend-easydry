@@ -42,6 +42,28 @@ export function ocurrenciaVigente(plan: CalendarioPlan, hoy: string, desde: stri
   return ultima && ultima >= desde ? ultima : null;
 }
 
+export const MODOS_ENTREGA = ['PERSONAS', 'AGENCIA'] as const;
+export type ModoEntrega = (typeof MODOS_ENTREGA)[number];
+export const MAX_BYTES_FIRMA_DOTACION = 400_000;
+export const FIRMA_PNG = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+/** Clave que identifica el destino de una entrega: la persona o, en modo AGENCIA, la agencia entera. */
+export function claveDestino(persona: { id: string }, agenciaId: string | null, modo: string): string {
+  return modo === 'AGENCIA' && agenciaId ? `agencia:${agenciaId}` : persona.id;
+}
+
+/** Agrupa a las personas elegibles por agencia (en modo AGENCIA hay una sola entrega por agencia). Quien no tiene agencia queda fuera. */
+export function agruparPorAgencia<T extends { agenciaId: string | null }>(personas: T[]): Map<string, T[]> {
+  const grupos = new Map<string, T[]>();
+  for (const p of personas) {
+    if (!p.agenciaId) continue;
+    const g = grupos.get(p.agenciaId);
+    if (g) g.push(p);
+    else grupos.set(p.agenciaId, [p]);
+  }
+  return grupos;
+}
+
 /** ¿La persona entra en el alcance del plan? Lista vacía = todos. Los roles de administración nunca reciben dotación. */
 export function personaEnPlan(plan: { roles: string[]; agenciasIds: string[] }, persona: { rol: string; agenciaId: string | null }): boolean {
   if (ROLES_SIN_DOTACION.includes(persona.rol)) return false;

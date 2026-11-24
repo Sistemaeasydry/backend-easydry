@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ocurrenciaVigente, personaEnPlan, sumarMeses } from './dotaciones.reglas.js';
+import { agruparPorAgencia, claveDestino, FIRMA_PNG, ocurrenciaVigente, personaEnPlan, sumarMeses } from './dotaciones.reglas.js';
 
 describe('sumarMeses', () => {
   it('conserva el día y cruza de año', () => {
@@ -52,5 +52,30 @@ describe('personaEnPlan', () => {
     expect(personaEnPlan(plan, { rol: 'LAVADOR', agenciaId: 'a2' })).toBe(false);
     expect(personaEnPlan(plan, { rol: 'LIDER', agenciaId: 'a1' })).toBe(false);
     expect(personaEnPlan(plan, { rol: 'LAVADOR', agenciaId: null })).toBe(false);
+  });
+});
+
+describe('entrega a la agencia completa', () => {
+  it('agrupa a las personas por agencia y deja fuera a quien no tiene', () => {
+    const grupos = agruparPorAgencia([
+      { id: 'a', agenciaId: 'A1' },
+      { id: 'b', agenciaId: 'A1' },
+      { id: 'c', agenciaId: 'A2' },
+      { id: 'd', agenciaId: null },
+    ]);
+    expect([...grupos.keys()]).toEqual(['A1', 'A2']);
+    expect(grupos.get('A1')?.map((p) => p.id)).toEqual(['a', 'b']);
+  });
+
+  it('el destino es la persona, o la agencia en modo AGENCIA', () => {
+    expect(claveDestino({ id: 'u1' }, 'A1', 'PERSONAS')).toBe('u1');
+    expect(claveDestino({ id: 'u1' }, 'A1', 'AGENCIA')).toBe('agencia:A1');
+    expect(claveDestino({ id: 'u1' }, null, 'AGENCIA')).toBe('u1');
+  });
+
+  it('la firma debe ser un PNG en data URL', () => {
+    expect(FIRMA_PNG.test('data:image/png;base64,iVBORw0KGgo=')).toBe(true);
+    expect(FIRMA_PNG.test('data:image/jpeg;base64,AAAA')).toBe(false);
+    expect(FIRMA_PNG.test('<script>')).toBe(false);
   });
 });

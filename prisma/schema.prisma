@@ -1313,18 +1313,18 @@ model EvidenciaIncidente {
 }
 
 model MantenimientoMaquinaria {
-  id           String     @id @default(uuid())
-  maquinariaId String
-  maquinaria   Maquinaria @relation(fields: [maquinariaId], references: [id], onDelete: Cascade)
+  id              String     @id @default(uuid())
+  maquinariaId    String
+  maquinaria      Maquinaria @relation(fields: [maquinariaId], references: [id], onDelete: Cascade)
   /// Sin técnico mientras nadie lo ha tomado: se programa primero y se asigna después. Es el «asistente» del mantenimiento.
-  tecnicoId    String?
-  tecnico      User?      @relation(fields: [tecnicoId], references: [id])
+  tecnicoId       String?
+  tecnico         User?      @relation(fields: [tecnicoId], references: [id])
   /// Avance de la atención: Asignado (con técnico) → En camino → Atendiendo → Finalizado. Se reinician al reasignar.
   fechaEnCamino   DateTime?
   fechaAtendiendo DateTime?
   /// Coordinador de mantenimiento responsable. Opcional al programar; obligatorio al asignar.
-  coordinadorId String?
-  coordinador   User?     @relation("MantenimientoCoordinador", fields: [coordinadorId], references: [id])
+  coordinadorId   String?
+  coordinador     User?      @relation("MantenimientoCoordinador", fields: [coordinadorId], references: [id])
 
   estado          String   @default("FINALIZADO") // "PENDIENTE" | "EN_PROCESO" | "FINALIZADO"
   observaciones   String?
@@ -2410,20 +2410,24 @@ model MovimientoDotacion {
 
 /// Qué se entrega, a quién (roles y/o agencias) y cuándo (fijo cada N meses u ocasional en una fecha).
 model PlanDotacion {
-  id          String   @id @default(uuid())
-  nombre      String
+  id            String   @id @default(uuid())
+  nombre        String
   /// FIJO (se repite cada `cadaMeses`) | OCASIONAL (una sola fecha)
-  tipo        String
-  fechaInicio DateTime @db.Date
-  cadaMeses   Int?
+  tipo          String
+  fechaInicio   DateTime @db.Date
+  cadaMeses     Int?
   /// Nombres de rol a los que aplica (vacío = todos los roles).
-  roles       String[] @default([])
+  roles         String[] @default([])
   /// Ids de agencia a las que aplica (vacío = todas).
-  agenciasIds String[] @default([])
-  activo      Boolean  @default(true)
-  creadoPorId String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  agenciasIds   String[] @default([])
+  /// PERSONAS (una entrega y una firma por persona) | AGENCIA (una sola entrega por agencia, la firma quien la recibe).
+  modoEntrega   String   @default("PERSONAS")
+  /// Coordinador que sale a entregar: solo él ve y registra las entregas de este plan (quien gestiona dotaciones ve todas).
+  coordinadorId String?
+  activo        Boolean  @default(true)
+  creadoPorId   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   items    PlanDotacionItem[]
   entregas EntregaDotacion[]
@@ -2446,26 +2450,34 @@ model PlanDotacionItem {
 
 /// Entrega pendiente (o hecha) de un plan a una persona en una fecha.
 model EntregaDotacion {
-  id              String       @id @default(uuid())
-  planId          String
-  plan            PlanDotacion @relation(fields: [planId], references: [id])
-  personaId       String
-  persona         User         @relation(fields: [personaId], references: [id])
-  fechaProgramada DateTime     @db.Date
+  id                String       @id @default(uuid())
+  planId            String
+  plan              PlanDotacion @relation(fields: [planId], references: [id])
+  /// Null cuando la entrega es a una agencia completa (plan en modo AGENCIA).
+  personaId         String?
+  persona           User?        @relation(fields: [personaId], references: [id])
+  /// personaId, o `agencia:<id>` en modo AGENCIA: identifica el destino para no repetir la entrega.
+  claveDestino      String
+  /// Cuántas personas cubre la entrega a una agencia (las cantidades del plan se multiplican por esto).
+  personasCubiertas Int?
+  fechaProgramada   DateTime     @db.Date
   /// PENDIENTE | ENTREGADA | OMITIDA
-  estado          String       @default("PENDIENTE")
-  entregadaEn     DateTime?
-  entregadaPorId  String?
-  nota            String?
+  estado            String       @default("PENDIENTE")
+  entregadaEn       DateTime?
+  entregadaPorId    String?
+  nota              String?
   /// Agencia y región de la persona al generarse (para filtrar y archivar).
-  agenciaId       String?
-  regionId        String?
-  createdAt       DateTime     @default(now())
+  agenciaId         String?
+  regionId          String?
+  /// Quien recibió y firmó en pantalla (imagen PNG en data URL).
+  recibeNombre      String?
+  firmaRecibe       String?      @db.Text
+  createdAt         DateTime     @default(now())
 
   items      EntregaDotacionItem[]
   evidencias EntregaDotacionEvidencia[]
 
-  @@unique([planId, personaId, fechaProgramada])
+  @@unique([planId, claveDestino, fechaProgramada])
   @@index([estado, fechaProgramada])
   @@index([personaId])
   @@map("dotaciones_entregas")
@@ -2501,30 +2513,30 @@ model EntregaDotacionEvidencia {
 
 /// Auditoría del sistema: quién hizo qué y cuándo. Inmutable (solo se agregan filas). Nunca guarda contraseñas ni tokens.
 model RegistroAuditoria {
-  id            String   @id @default(uuid())
-  createdAt     DateTime @default(now())
-  actorId       String
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  actorId     String
   /// Nombre y rol del actor al momento de actuar (se conservan aunque después cambien).
-  actorNombre   String
-  actorRol      String
+  actorNombre String
+  actorRol    String
   /// Código de la pantalla del sistema a la que pertenece (el mismo de `modulos_sistema`): define quién puede ver la fila.
-  modulo        String
+  modulo      String
   /// Acción del catálogo de permisos que se ejercía (p. ej. `usuarios.usuarios.datos`) o, si no hay, el método y la ruta.
-  accion        String
-  metodo        String
-  ruta          String
-  entidadTipo   String?
-  entidadId     String?
+  accion      String
+  metodo      String
+  ruta        String
+  entidadTipo String?
+  entidadId   String?
   /// Frase corta, legible, de lo que pasó.
-  resumen       String
-  antes         Json?
-  despues       Json?
+  resumen     String
+  antes       Json?
+  despues     Json?
   /// Lo que mandó el usuario, sin datos secretos y recortado.
-  datos         Json?
+  datos       Json?
   /// Dónde ocurrió (para que cada rol vea solo su alcance).
-  agenciaId     String?
-  regionId      String?
-  ip            String?
+  agenciaId   String?
+  regionId    String?
+  ip          String?
 
   @@index([createdAt])
   @@index([modulo, createdAt])
@@ -2536,15 +2548,15 @@ model RegistroAuditoria {
 
 /// Quién consultó o exportó la auditoría, con qué filtros.
 model ConsultaAuditoria {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  userId    String
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  userId     String
   userNombre String
-  userRol   String
+  userRol    String
   /// CONSULTA | EXCEL | PDF
-  tipo      String
-  filtros   Json?
-  filas     Int      @default(0)
+  tipo       String
+  filtros    Json?
+  filas      Int      @default(0)
 
   @@index([createdAt])
   @@index([userId, createdAt])

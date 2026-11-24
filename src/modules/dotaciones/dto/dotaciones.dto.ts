@@ -17,7 +17,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { MAX_EVIDENCIAS_DOTACION } from '../dotaciones.reglas.js';
+import { FIRMA_PNG, MAX_BYTES_FIRMA_DOTACION, MAX_EVIDENCIAS_DOTACION, MODOS_ENTREGA } from '../dotaciones.reglas.js';
 
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -57,6 +57,10 @@ export class GuardarPlanDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(120) cadaMeses?: number;
   @IsArray() @IsString({ each: true }) roles!: string[];
   @IsArray() @IsUUID('all', { each: true }) agenciasIds!: string[];
+  /** PERSONAS: una entrega y una firma por persona. AGENCIA: una sola entrega por agencia. */
+  @IsIn(MODOS_ENTREGA as unknown as string[]) modoEntrega!: 'PERSONAS' | 'AGENCIA';
+  /** Coordinador que sale a entregar. */
+  @IsUUID() coordinadorId!: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => ItemPlanDto) items!: ItemPlanDto[];
 }
 
@@ -87,6 +91,14 @@ export class RegistrarEntregaDto {
   @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => ItemEntregadoDto) items!: ItemEntregadoDto[];
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(MAX_EVIDENCIAS_DOTACION) @ValidateNested({ each: true }) @Type(() => EvidenciaDotacionDto) evidencias!: EvidenciaDotacionDto[];
   @IsOptional() @IsString() @MaxLength(500) nota?: string;
+  /** Nombre de quien recibe. */
+  @IsString() @MinLength(3) @MaxLength(120) recibeNombre!: string;
+  /** Firma de quien recibe, dibujada en pantalla (PNG en data URL). */
+  @IsString() @Matches(FIRMA_PNG, { message: 'La firma no es válida.' }) @MaxLength(MAX_BYTES_FIRMA_DOTACION) firmaRecibe!: string;
+}
+
+export class EntregaIdDto {
+  @IsUUID() entregaId!: string;
 }
 
 export class OmitirEntregaDto {

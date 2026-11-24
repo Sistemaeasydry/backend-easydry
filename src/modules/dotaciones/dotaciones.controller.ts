@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Permiso } from '../../common/permisos/permisos.decorators.js';
 import { DotacionesService } from './dotaciones.service.js';
 import {
+  EntregaIdDto,
   EstadoPlanDto,
   GuardarCategoriaDto,
   GuardarPlanDto,
@@ -103,8 +104,24 @@ export class DotacionesController {
   @Post('entregas/list')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Entregas de dotación (pendientes, entregadas u omitidas)' })
-  listarEntregas(@Body() dto: ListarEntregasDto) {
-    return this.dotaciones.listarEntregas(dto);
+  listarEntregas(@Body() dto: ListarEntregasDto, @CurrentUser() user: any) {
+    return this.dotaciones.listarEntregas(dto, user);
+  }
+
+  @Permiso('dotaciones.ver')
+  @Post('entregas/firma')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Nombre y firma de quien recibió una entrega' })
+  firmaEntrega(@Body() dto: EntregaIdDto, @CurrentUser() user: any) {
+    return this.dotaciones.firmaDeEntrega(dto.entregaId, user);
+  }
+
+  @Permiso(...GESTIONAR_PLANES)
+  @Post('coordinadores/list')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Personas que pueden salir a entregar (rol con permiso de registrar entregas)' })
+  listarCoordinadores() {
+    return this.dotaciones.listarCoordinadores();
   }
 
   @Permiso(...ENTREGAR)
