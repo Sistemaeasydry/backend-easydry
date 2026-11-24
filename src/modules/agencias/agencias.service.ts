@@ -3239,6 +3239,9 @@ export class AgenciasService {
     const whereFinal = combinarWhere(whereBase, this.whereSegmentoUsuario(dto.segmento));
 
     const orderBy = resolverOrden(dto.sortField, dto.sortOrder, ORDEN_USUARIOS, { campo: 'creado', dir: 'desc' });
+    // Ordenar por nombre es ordenar por «apellidos nombres»: con el mismo apellido manda el nombre (y no el id, que sería al azar).
+    const primero = orderBy[0] as Record<string, unknown>;
+    if ('lastname' in primero) orderBy.splice(1, 0, { name: primero.lastname });
 
     const [items, total] = await Promise.all([
       this.prisma.user.findMany({

@@ -122,7 +122,7 @@ describe('AgenciasService.listUsuariosPorAgencia (base real)', () => {
       expect(JSON.stringify(p1.items)).not.toMatch(/passwordHash|password/i);
 
       const p3: any = await service.listUsuariosPorAgencia(dto({ page: 3, pageSize: 2, agenciaId: a1.id, sortField: 'nombre', sortOrder: 'asc' }), admin);
-      expect(claves(p3.items)).toEqual(['zoe']);
+      expect(claves(p3.items)).toEqual(['juan']); // apellidos primero: Juan Quito va después de los «Prueba»
       expect(p3).toMatchObject({ hasNextPage: false, hasPrevPage: true });
     });
 
@@ -146,7 +146,7 @@ describe('AgenciasService.listUsuariosPorAgencia (base real)', () => {
       expect(roles).toEqual([...roles].sort());
 
       const porNombreDesc: any = await service.listUsuariosPorAgencia(dto({ page: 1, agenciaId: a1.id, sortField: 'nombre', sortOrder: 'desc' }), admin);
-      expect(claves(porNombreDesc.items)).toEqual(['zoe', 'juan', 'carla', 'beto', 'ana']);
+      expect(claves(porNombreDesc.items)).toEqual(['juan', 'zoe', 'carla', 'beto', 'ana']);
 
       const porDefecto: any = await service.listUsuariosPorAgencia(dto({ page: 1, agenciaId: a1.id }), admin);
       for (const campo of ['password; DROP TABLE', 'passwordHash']) {
@@ -174,7 +174,7 @@ describe('AgenciasService.listUsuariosPorAgencia (base real)', () => {
 
     it('aplica en el servidor agencia, región, cliente, estado y rol', async () => {
       const porRegion: any = await service.listUsuariosPorAgencia(dto({ page: 1, regionId: regionA.id, sortField: 'nombre', sortOrder: 'asc' }), admin);
-      expect(claves(porRegion.items)).toEqual(['ana', 'beto', 'carla', 'juan', 'luis', 'supA', 'zoe']);
+      expect(claves(porRegion.items)).toEqual(['ana', 'beto', 'carla', 'luis', 'supA', 'zoe', 'juan']);
 
       const porCliente: any = await service.listUsuariosPorAgencia(dto({ page: 1, clienteId: clienteX.id }), admin);
       expect(new Set(claves(porCliente.items))).toEqual(new Set(['ana', 'beto', 'carla', 'juan', 'zoe']));
