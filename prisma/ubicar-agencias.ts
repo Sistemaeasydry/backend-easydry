@@ -308,7 +308,9 @@ async function main() {
   for (const r of unidas) {
     const a = r.agencia!;
     const data: { direccion?: string; latitud?: number; longitud?: number } = {};
-    if (r.f.direccion && (SOBRESCRIBIR || !a.direccion)) data.direccion = r.f.direccion;
+    // «SIN DIRECCION» es el relleno que dejó una carga anterior: cuenta como vacío.
+    const vacia = !a.direccion || /^\s*sin\s+direcci[oó]n\s*$/i.test(a.direccion);
+    if (r.f.direccion && (SOBRESCRIBIR || vacia)) data.direccion = r.f.direccion;
     const guardable = !SOLO_DIRECCIONES && CON_UBICACION && r.h && (r.h.calidad === 'LUGAR' || APROXIMADAS);
     if (guardable && (SOBRESCRIBIR || a.latitud === null || a.longitud === null)) {
       data.latitud = r.h!.lat;
