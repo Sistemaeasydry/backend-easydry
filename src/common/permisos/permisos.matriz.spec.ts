@@ -24,8 +24,7 @@ const usuario = (namerol: string) => {
 };
 
 /** ADMIN y SUPER_ADMIN no timbran ni reciben tareas. */
-// Lo que los administradores no tienen: recibir tareas y estar obligados a timbrar (timbrar sí pueden, voluntariamente).
-const NO_TIMBRAN: string[] = ['rrhh.timbrada.obligatoria', 'rrhh.tareas.propias'];
+const NO_TIMBRAN: string[] = ['rrhh.timbrar', 'rrhh.timbrada.obligatoria', 'rrhh.tareas.propias'];
 
 describe('catálogo de permisos', () => {
   it('no repite códigos y todos siguen el formato modulo.accion', () => {
@@ -73,8 +72,8 @@ describe('matriz acordada de permisos por rol', () => {
 
   it('RRHH: todos timbran y reciben tareas menos ADMIN y SUPER_ADMIN; asignan solo los acordados; las ubicaciones, solo los administradores', () => {
     const todos = ROLES_BASE.map((r) => r.namerol);
-    // Todos pueden timbrar. La timbrada solo es obligatoria para quien tiene `rrhh.timbrada.obligatoria`: no la tienen ADMIN, SUPER_ADMIN ni APROBADOR.
-    expect(rolesCon('rrhh.timbrar').sort()).toEqual([...todos].sort());
+    // Timbran todos menos ADMIN y SUPER_ADMIN. La timbrada solo es obligatoria para quien tiene `rrhh.timbrada.obligatoria`: tampoco el APROBADOR.
+    expect(rolesCon('rrhh.timbrar').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN'].includes(n)).sort());
     expect(rolesCon('rrhh.timbrada.obligatoria').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN', 'APROBADOR'].includes(n)).sort());
     expect(rolesCon('rrhh.tareas.propias').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN'].includes(n)).sort());
     const asignan = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'TALENTO_HUMANO', 'AUXILIAR'].sort();

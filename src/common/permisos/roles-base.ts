@@ -444,10 +444,9 @@ for (const rol of ROLES_BASE) {
 }
 // RRHH: todos los roles menos ADMIN y SUPER_ADMIN timbran y reciben tareas. Asignan tareas y ven las timbradas del equipo (dentro de su
 // ámbito) los administradores, el supervisor, los coordinadores y el líder. Solo ADMIN y SUPER_ADMIN configuran las ubicaciones.
-// ADMIN, SUPER_ADMIN y APROBADOR pueden timbrar, pero no están obligados: no tienen `rrhh.timbrada.obligatoria`. ADMIN y SUPER_ADMIN
-// tampoco reciben tareas.
+// ADMIN y SUPER_ADMIN no timbran ni reciben tareas. El APROBADOR puede timbrar, pero no está obligado: no tiene `rrhh.timbrada.obligatoria`.
 const ROLES_NO_TIMBRAN = ['SUPER_ADMIN', 'ADMIN'];
-const ROLES_TIMBRADA_VOLUNTARIA = ['SUPER_ADMIN', 'ADMIN', 'APROBADOR'];
+const ROLES_TIMBRADA_VOLUNTARIA = ['APROBADOR'];
 // El BACKUP reemplaza al líder y el AUXILIAR copia sus permisos (lavador con las capacidades del líder): heredan los suyos.
 // Lavador, pulidor, líder y backup (personal operativo) solo reciben tareas: no las asignan. El líder y el backup sí ven las timbradas de su agencia.
 const ROLES_ASIGNAN_TAREAS = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'TALENTO_HUMANO', 'AUXILIAR'];
@@ -457,12 +456,12 @@ const ROLES_EDITAN_HORARIOS = ['SUPER_ADMIN', 'ADMIN', 'TALENTO_HUMANO'];
 const CAPACIDADES_RRHH_PROPIAS: CodigoPermiso[] = p('rrhh.timbrar', 'rrhh.tareas.propias');
 for (const rol of ROLES_BASE) {
   const quitar: CodigoPermiso[] = [
-    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.tareas.propias') : []),
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.timbrar', 'rrhh.tareas.propias', 'rrhh.timbrada.obligatoria') : []),
     ...(ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? p('rrhh.timbrada.obligatoria') : []),
   ];
   const extra: CodigoPermiso[] = [
-    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.timbrar') : CAPACIDADES_RRHH_PROPIAS),
-    ...(ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? [] : p('rrhh.timbrada.obligatoria')),
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? [] : CAPACIDADES_RRHH_PROPIAS),
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) || ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? [] : p('rrhh.timbrada.obligatoria')),
     ...(ROLES_ASIGNAN_TAREAS.includes(rol.namerol) ? p('rrhh.tareas.asignar', 'rrhh.tareas.crear', 'rrhh.tareas.revisar', 'rrhh.tareas.cancelar', 'rrhh.tareas.reasignar') : []),
     ...(ROLES_VEN_TIMBRADAS_EQUIPO.includes(rol.namerol) ? p('rrhh.timbradas.ver') : []),
     ...(ROLES_CONFIGURAN_UBICACION.includes(rol.namerol) ? p('rrhh.ubicaciones.gestionar', 'rrhh.ubicaciones.quitar') : []),
