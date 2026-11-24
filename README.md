@@ -122,7 +122,7 @@ npx prisma generate
 ```
 
 #### B. Sembrar roles y cuentas iniciales
-El seed (`prisma/seed.ts`) es idempotente: no borra nada por defecto y solo crea lo que falta. Siembra los roles oficiales (desde `prisma/data/roles.json`), las pantallas del sistema y **únicamente** las cuentas `SUPER_ADMIN` y `ADMIN`, con los correos y contraseñas del `.env` (`SEED_*`).
+El seed (`prisma/seed.ts`) es idempotente: no borra nada por defecto y solo crea lo que falta. Siembra los roles oficiales (desde `prisma/data/roles.json`), las pantallas del sistema y **únicamente** las cuentas `SUPER_ADMIN` y `ADMIN`, con los correos y contraseñas del `.env` (`SEED_*`). Esas cuentas solo se crean para arrancar una base sin ninguna cuenta con ese rol: si ya existe alguien con el rol, el seed no agrega otra.
 ```bash
 pnpm run prisma:seed
 # o directamente:

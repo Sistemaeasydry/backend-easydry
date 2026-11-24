@@ -173,6 +173,13 @@ async function main() {
   for (const c of cuentas) {
     const existe = await prisma.user.findUnique({ where: { email: c.email } });
     if (existe) continue;
+    // Las cuentas del seed son solo para arrancar una base vacía: si ya hay alguien con ese rol, no se crea otra cuenta (p. ej. cuando
+    // el correo del .env cambió o la cuenta original se renombró). Así volver a correr el seed nunca agrega usuarios con privilegios.
+    const yaHayConEseRol = await prisma.user.count({ where: { roleId: rolesMap.get(c.rol)! } });
+    if (yaHayConEseRol > 0) {
+      console.log(`   · Ya existe al menos una cuenta ${c.rol}: no se crea ${c.email}`);
+      continue;
+    }
     await prisma.user.create({
       data: {
         email: c.email,
