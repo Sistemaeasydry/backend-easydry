@@ -4082,7 +4082,7 @@ export class InventarioService {
                 m."origenUbicacion", m."destinoUbicacion", m."fechaDespacho", m."fechaRecepcion",
                 m."observaciones", m."usuarioDespachaId", m."usuarioRecibeId", m."createdAt", m."updatedAt",
                 m."origenBodegaId", m."origenAgenciaId", m."destinoBodegaId", m."destinoAgenciaId", m."destinoPulidorId",
-                m."requiereAprobacion", m."aprobadoPorId", m."fechaAprobacion", m."motivoAprobacion"
+                m."requiereAprobacion", m."aprobadoPorId", m."fechaAprobacion", m."motivoAprobacion", m."avisoAprobacionEn"
          FROM "MovimientoInventario" m
          WHERE ${filtro.sql}
          ORDER BY ${orden}

@@ -204,7 +204,8 @@ export const TABLAS_OPERACION: TablaArchivable[] = [
     modelo: 'movimientoInventario',
     columnaFecha: 'fechaDespacho',
     ventanaDias: DOCE_MESES,
-    esquemaVersion: 1,
+    // v2: se agregan los datos de aprobación del envío. Los archivos de la v1 no los traen y se leen como vacíos (union_by_name).
+    esquemaVersion: 2,
     // Vivo: un despacho sin cerrar, o con un faltante que la bodega de origen aún no devuelve ni da de baja.
     filtro: { estadoDespacho: { in: ['RECIBIDO', 'RECHAZADO', 'CANCELADO'] }, faltantes: { none: { estado: 'PENDIENTE' } } },
     columnas: [
@@ -224,6 +225,11 @@ export const TABLAS_OPERACION: TablaArchivable[] = [
       { nombre: 'fechaDespacho', tipo: 'TIMESTAMP' },
       { nombre: 'fechaRecepcion', tipo: 'TIMESTAMP' },
       { nombre: 'observaciones', tipo: 'STRING' },
+      { nombre: 'requiereAprobacion', tipo: 'BOOLEAN' },
+      { nombre: 'aprobadoPorId', tipo: 'STRING' },
+      { nombre: 'fechaAprobacion', tipo: 'TIMESTAMP' },
+      { nombre: 'motivoAprobacion', tipo: 'STRING' },
+      { nombre: 'avisoAprobacionEn', tipo: 'TIMESTAMP' },
       { nombre: 'createdAt', tipo: 'TIMESTAMP' },
       { nombre: 'updatedAt', tipo: 'TIMESTAMP' },
     ],

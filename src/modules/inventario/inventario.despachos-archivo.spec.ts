@@ -62,8 +62,8 @@ describe.skipIf(!(await duckdbDisponible))('listDespachos con datos archivados (
     const lider = await env.usuario('dp-lider', 'LIDER', { agenciaId: ag1.id });
     const supervisor = await env.usuario('dp-super', 'SUPERVISOR', { regionId: region.id });
     const pulidor = await env.usuario('dp-pulidor', 'PULIDOR', { agenciaId: ag1.id, name: `Pablo${env.marca}`, lastname: 'Ruiz' });
-    const superAdmin = await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } });
-    const admin = await env.prisma.user.findFirstOrThrow({ where: { email: 'admin@easydry.com' }, select: { id: true } });
+    const superAdmin = await env.cuentaDeSistema('SUPER_ADMIN');
+    const admin = await env.cuentaDeSistema('ADMIN');
     Object.assign(ids, { ag1: ag1.id, ag2: ag2.id, lider: lider.id, supervisor: supervisor.id, pulidor: pulidor.id, superAdmin: superAdmin.id, admin: admin.id, nombreAg1: ag1.nombre });
 
     let n = 0;
@@ -186,7 +186,16 @@ describe.skipIf(!(await duckdbDisponible))('listDespachos con datos archivados (
       if (JSON.stringify(canonico(a.resumen)) !== JSON.stringify(canonico(b.resumen))) partes.push(`resumen ${JSON.stringify(a.resumen)} → ${JSON.stringify(b.resumen)}`);
       const lista = (x: any) => (x.data ?? x).map((d: any) => `${d.numeroGuia.slice(-2)}(${d.detalles?.length})`).join(',');
       if (lista(a) !== lista(b)) partes.push(`filas ${lista(a)} → ${lista(b)}`);
-      return partes.join('; ') || 'mismo contenido pero distinto JSON (campos)';
+      const difiere = (x: any, y: any, ruta: string): string | null => {
+        if (x === y) return null;
+        if (typeof x !== 'object' || typeof y !== 'object' || x === null || y === null) return `${ruta}: ${JSON.stringify(x)} → ${JSON.stringify(y)}`;
+        for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) {
+          const d = difiere(x[k], y[k], `${ruta}.${k}`);
+          if (d) return d;
+        }
+        return null;
+      };
+      return partes.join('; ') || `mismo contenido pero distinto JSON, primer campo distinto ${difiere(a, b, '')}`;
     };
     const diferentes: string[] = [];
     for (const caso of casos) {
