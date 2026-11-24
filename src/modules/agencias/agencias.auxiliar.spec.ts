@@ -92,13 +92,15 @@ describe('auxiliar del líder (base real)', () => {
     await expect(service.createUsuario({ ...datos('tel-malo'), rolNombre: 'LIDER', bahiaId: undefined, telefono: '123' } as any, actor())).rejects.toThrow(/celular/i);
   });
 
-  it('el auxiliar tiene las mismas capacidades que el líder', async () => {
+  it('el auxiliar tiene las mismas capacidades que el líder, más asignar tareas de RRHH', async () => {
     const [aux, lider] = await Promise.all([
       env.prisma.role.findUniqueOrThrow({ where: { namerol: 'AUXILIAR' } }),
       env.prisma.role.findUniqueOrThrow({ where: { namerol: 'LIDER' } }),
     ]);
     const sinFunciones = (c: string[]) => c.filter((x) => !x.startsWith('funcion.')).sort();
-    expect(sinFunciones(aux.capacidades)).toEqual(sinFunciones(lider.capacidades));
+    // El auxiliar copia al líder y además asigna tareas a su equipo (decisión de RRHH).
+    const conTareas = [...sinFunciones(lider.capacidades), 'rrhh.tareas.asignar', 'pagina.rrhh-tareas.asignadas'].sort();
+    expect(sinFunciones(aux.capacidades)).toEqual(conTareas);
     expect(aux.ambito).toBe('AGENCIA');
   });
 });

@@ -68,7 +68,7 @@ describe.skipIf(!(await duckdbDisponible))('sync: idempotencia contra servicios 
     await env.prisma.agencia.update({ where: { id: agencia.id }, data: { servicioIds: [catalogo.id] } });
     lider = await env.usuario('lider', 'LIDER', { agenciaId: agencia.id });
     // El rol LIDER no crea servicios especiales: esas mutaciones las empuja el Super Admin sembrado.
-    superAdminId = (await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } })).id;
+    superAdminId = (await env.cuentaDeSistema('SUPER_ADMIN')).id;
 
     const uuidLavado = `${env.marca}-uuid-lavado-viejo`;
     const l = await env.servicioLavado({ bahiaId: bahia.id, operadorId: lider.id, catalogoId: catalogo.id, estado: 'APROBADO', horaIngreso: new Date(MARCA_VIEJA), horaSalida: new Date(MARCA_VIEJA + 40 * 60000), placa: 'OLD-111', datos: { clientUuid: uuidLavado } });

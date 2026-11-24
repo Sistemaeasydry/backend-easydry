@@ -30,10 +30,12 @@ describe('RolesService (base real)', () => {
     const ad = await env.usuario('admin', 'ADMIN', { name: 'Administradora' });
     // Un administrador al que se le dio el permiso de gestionar roles (no lo trae de fábrica).
     admin = await env.actor(ad.id);
-    admin.roleDetails = { ...admin.roleDetails, capacidades: [...admin.roleDetails.capacidades, 'roles.gestionar'] };
+    // Los permisos del actor son los de fábrica del rol (no los de la fila que haya en la base local, que puede estar desactualizada).
+    const deFabrica = (rol: string) => ROLES_BASE.find((x) => x.namerol === rol)!.capacidades;
+    admin.roleDetails = { ...admin.roleDetails, capacidades: [...deFabrica('ADMIN'), 'roles.gestionar'] };
     const su = await env.usuario('supervisor', 'SUPERVISOR', { name: 'Supervisor' });
     supervisor = await env.actor(su.id);
-    supervisor.roleDetails = { ...supervisor.roleDetails, capacidades: [...supervisor.roleDetails.capacidades, 'roles.gestionar'] };
+    supervisor.roleDetails = { ...supervisor.roleDetails, capacidades: [...deFabrica('SUPERVISOR'), 'roles.gestionar'] };
   });
 
   afterAll(async () => {

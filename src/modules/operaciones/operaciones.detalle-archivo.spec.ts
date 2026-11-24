@@ -50,7 +50,7 @@ describe.skipIf(!(await duckdbDisponible))('detalle de servicios archivados (bas
   beforeAll(async () => {
     env = await abrirEntorno();
     raiz = mkdtempSync(join(tmpdir(), 'detalle-archivo-'));
-    admin = await env.actor((await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } })).id);
+    admin = await env.actor((await env.cuentaDeSistema('SUPER_ADMIN')).id);
     const region = await env.region('d1');
     const otra = await env.region('d2');
     regionAjena = { id: 'regional-ajeno', name: 'Ajeno', lastname: 'X', regionId: otra.id, role: { namerol: 'SUPERVISOR', ambito: 'REGION', capacidades: [] } };

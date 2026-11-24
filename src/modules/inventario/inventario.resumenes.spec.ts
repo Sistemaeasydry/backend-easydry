@@ -216,7 +216,8 @@ describe('resúmenes de stock (base real)', () => {
       expect(r.pulidor).toMatchObject({ id: ids.ana, tipoPulidor: 'PULIDOR_FIJO' });
       const stocks = r.items.map((i: any) => i.stockActual);
       expect(stocks).toEqual([...stocks].sort((a, b) => a - b));
-      expect(r.total).toBe(r.items.length);
+      // Una página de 25: con el catálogo real cargado el kit puede tener más insumos que los que caben en la primera página.
+      expect(r.items.length).toBe(Math.min(r.total, 25));
     });
 
     it('un pulidor solo ve su propio kit', async () => {

@@ -37,7 +37,7 @@ describe.skipIf(!(await duckdbDisponible))('listado de servicios especiales con 
   beforeAll(async () => {
     env = await abrirEntorno();
     raiz = mkdtempSync(join(tmpdir(), 'especiales-archivo-'));
-    const superAdmin = await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } });
+    const superAdmin = await env.cuentaDeSistema('SUPER_ADMIN');
     admin = await env.actor(superAdmin.id);
 
     const r1 = await env.region('e1');

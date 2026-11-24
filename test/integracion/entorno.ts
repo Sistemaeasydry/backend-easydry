@@ -131,6 +131,11 @@ export interface Entorno {
     rol: string,
     opts?: { agenciaId?: string | null; regionId?: string | null; bodegaId?: string | null; estado?: number; name?: string; lastname?: string },
   ): Promise<{ id: string; email: string; name: string; lastname: string }>;
+  /**
+   * Una cuenta de sistema (SUPER_ADMIN o ADMIN) para las pruebas: usa una activa que ya exista en la base y, si no hay ninguna (el seed ya no
+   * las crea y la carga de Excel solo deja Super Admin), crea una de prueba que se borra al cerrar. Así las pruebas no dependen de un correo fijo.
+   */
+  cuentaDeSistema(rol: 'SUPER_ADMIN' | 'ADMIN'): Promise<{ id: string }>;
   /** El usuario tal como lo deja la estrategia JWT en `req.user`. */
   actor(userId: string): Promise<any>;
   /** Registra una fila creada por el servicio probado (modelo Prisma, id) para que se borre al cerrar. */
@@ -448,6 +453,16 @@ export async function abrirEntorno(): Promise<Entorno> {
       }
     },
 
+    async cuentaDeSistema(rol) {
+      const existente = await prisma.user.findFirst({ where: { estado: 1, role: { namerol: rol } }, select: { id: true }, orderBy: { createdAt: 'asc' } });
+      if (existente) return existente;
+      const u = await prisma.user.create({
+        data: { email: `${marca}-${rol.toLowerCase()}@prueba.local`, passwordHash: 'no-se-usa-en-pruebas', name: `${marca}${rol}`, lastname: 'Prueba', roleId: await rolId(rol) },
+        select: { id: true },
+      });
+      rastrear('User', u.id);
+      return u;
+    },
     async usuario(sufijo, rol, opts = {}) {
       const u = await prisma.user.create({
         data: {

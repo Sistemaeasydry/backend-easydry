@@ -54,7 +54,7 @@ describe('asignar contraseña a un usuario (base real)', () => {
     const admin = await env.usuario('pw-admin', 'ADMIN');
     const admin2 = await env.usuario('pw-admin2', 'ADMIN');
     Object.assign(ids, { r1: r1.id, r2: r2.id, a1: a1.id, a2: a2.id, a3: a3.id, lav1: lav1.id, lav2: lav2.id, lav3: lav3.id, sup1: sup1.id, sup2: sup2.id, coord: coord.id, admin: admin.id, admin2: admin2.id });
-    const superAdmin = await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } });
+    const superAdmin = await env.cuentaDeSistema('SUPER_ADMIN');
     ids.superAdmin = superAdmin.id;
   });
 

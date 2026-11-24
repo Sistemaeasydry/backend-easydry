@@ -69,10 +69,18 @@ describe('RetosService.cerrar — notificación (base real)', () => {
   };
   /** Espera los avisos de cierre de un reto (el envío es "fire-and-forget") y devuelve a quién llegaron. */
   const avisos = async (retoId: string) => {
-    const filas = await env.esperar(async () => {
-      const f = await env.prisma.notification.findMany({ where: { entidadTipo: 'RETO', entidadId: retoId } });
+    const leer = () => env.prisma.notification.findMany({ where: { entidadTipo: 'RETO', entidadId: retoId } });
+    let filas = await env.esperar(async () => {
+      const f = await leer();
       return f.length ? f : null;
     });
+    // Los avisos llegan en lotes: con la máquina cargada el primero aparece antes que el resto, así que se espera a que el conteo se estabilice.
+    for (let i = 0; i < 20; i++) {
+      await new Promise((ok) => setTimeout(ok, 300));
+      const otra = await leer();
+      if (otra.length === filas.length) break;
+      filas = otra;
+    }
     return { filas, destinatarios: new Set(filas.map((f) => f.userId)) };
   };
 

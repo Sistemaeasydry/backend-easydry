@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { InventarioService } from './inventario.service.js';
 import { ListDespachosDto } from './dto/movimientos.dto.js';
 import { abrirEntorno, type Entorno } from '../../../test/integracion/entorno.js';
+import { fechaEnEcuador } from '../rrhh/rrhh.reglas.js';
 
 /**
  * Integración con la base real (sin mocks): el listado de despachos (SQL con alcance por rol).
@@ -154,7 +155,8 @@ describe('InventarioService.listDespachos (base real)', () => {
       // cargada pasa de 1 segundo) y seguir dejando fuera las filas vecinas, que están a un día de distancia.
       const filtradas = await lista({
         fechaDesde: new Date(hace(6).getTime() - 10 * 60_000).toISOString(),
-        fechaHasta: hace(4).toISOString().slice(0, 10),
+        // El día se cuenta en hora de Ecuador (UTC-5): con la fecha UTC, desde las 19:00 el "día -4" caería un día adelante.
+        fechaHasta: fechaEnEcuador(hace(4)).dia,
       });
       expect(nombres(filtradas).sort()).toEqual(['D2', 'D3', 'D4']);
     });
@@ -198,7 +200,7 @@ describe('InventarioService.listDespachos (base real)', () => {
     it('cuenta por estado con los mismos filtros pero sin el de estado', async () => {
       const r: any = await lista({ page: 1, incluirResumen: true, estadoDespacho: 'RECIBIDO' });
       expect(nombres(r)).toEqual(['D2']); // la página sí respeta el estado…
-      expect(r.resumen).toEqual({ enTransito: 5, recibidos: 1, rechazados: 1, total: 7 }); // …el resumen no
+      expect(r.resumen).toEqual({ enTransito: 5, pendientesAprobacion: 0, recibidos: 1, rechazados: 1, total: 7 }); // …el resumen no
     });
   });
 

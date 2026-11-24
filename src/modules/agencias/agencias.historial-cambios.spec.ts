@@ -97,7 +97,9 @@ describe('Agencias: historial de cambios de agencia (base real)', () => {
     await service.updateUsuario({ id: ids.pia, agenciaId: a2.id, motivo: 'Traslado' } as any, actores.admin);
     const nombres = async (actor: any) => {
       const r: any = await service.listHistorialCambiosAgencia({ page: 1, pageSize: 100 } as any, actor);
-      return [...new Set((r.items ?? r.data ?? []).map((x: any) => x.usuario.name))].sort();
+      // Solo las personas de esta prueba: la base local puede tener cambios de agencia reales de otras.
+      const propios = new Set(Object.values(ids));
+      return [...new Set((r.items ?? r.data ?? []).filter((x: any) => propios.has(x.usuario.id)).map((x: any) => x.usuario.name))].sort();
     };
     expect(await nombres(actores.admin)).toEqual(['Lalo', 'Luis', 'Pia']);
     expect(await nombres(actores.supR1)).toEqual(['Lalo', 'Luis', 'Pia']); // Lalo ahora trabaja en A2 (R1)

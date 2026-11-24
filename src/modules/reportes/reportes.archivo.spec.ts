@@ -84,7 +84,7 @@ describe.skipIf(!duckdbDisponible)('reportes con datos archivados (base real + D
   beforeAll(async () => {
     env = await abrirEntorno();
     raiz = mkdtempSync(join(tmpdir(), 'reportes-archivo-'));
-    const admin = await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } });
+    const admin = await env.cuentaDeSistema('SUPER_ADMIN');
     actor = await env.actor(admin.id);
 
     const region = await env.region('rep');

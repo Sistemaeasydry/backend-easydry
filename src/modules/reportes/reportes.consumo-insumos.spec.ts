@@ -55,7 +55,7 @@ describe('reportes de consumo de insumos (base real)', () => {
   beforeAll(async () => {
     env = await abrirEntorno();
     raiz = mkdtempSync(join(tmpdir(), 'consumo-insumos-'));
-    actor = await env.actor((await env.prisma.user.findFirstOrThrow({ where: { email: 'superadmin@easydry.com' }, select: { id: true } })).id);
+    actor = await env.actor((await env.cuentaDeSistema('SUPER_ADMIN')).id);
     const region = await env.region('ci');
     const ag1 = await env.agencia('ci1', { regionId: region.id });
     const ag2 = await env.agencia('ci2', { regionId: region.id });
@@ -158,7 +158,7 @@ describe('reportes de consumo de insumos (base real)', () => {
 
     const porRegion = filas(antes.get('consumo-insumos-pulidor|por región (con pulidores móviles)'));
     const moviles = porRegion.filter((f: any) => f.grupo.includes('móviles'));
-    expect(sumaPor(moviles, (f) => f.pulidor.replace(env.marca, ''), 'cantidad')).toEqual({ 'Beto Movil': 7 });
+    expect(sumaPor(moviles, (f) => f.pulidor.replace(env.marca, ''), 'cantidad')).toEqual({ 'Movil Beto': 7 });
     expect(moviles[0]).toMatchObject({ sku: 'SKU-C', insumo: 'Cera', unidad: 'u', servicios: 1 });
   });
 
