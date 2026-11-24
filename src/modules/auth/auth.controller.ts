@@ -29,7 +29,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Sesión iniciada exitosamente con accessToken y refreshToken' })
   @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
   async login(@Body() loginDto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    return this.entregarSesion(await this.authService.login(loginDto), req, res);
+    return this.entregarSesion(await this.authService.login(loginDto, this.esWeb(req)), req, res);
   }
 
   @Publico()

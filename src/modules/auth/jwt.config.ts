@@ -18,6 +18,8 @@ export const JWT_SIGN_OPTIONS = {
 /** Vida del access token si `JWT_ACCESS_EXPIRATION` no está definida. Corta: el refresh token renueva la sesión. */
 export const JWT_ACCESS_DEFAULT = '15m';
 export const JWT_REFRESH_DEFAULT = '15d';
+/** La app móvil no cierra sesión sola: su refresh token (que se renueva en cada uso) casi no vence. Solo el botón «Salir» o un admin la cierran. */
+export const JWT_REFRESH_MOVIL = '3650d';
 
 /** Cookie HttpOnly con el refresh token del cliente web (la app móvil lo recibe en el cuerpo y lo guarda en el dispositivo). */
 export const REFRESH_COOKIE = 'easydry_rt';

@@ -10,10 +10,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { StorageService } from '../storage/storage.service.js';
-import { exigirPasswordSegura } from '../../common/utils/password-politica.js';
+import { exigirConfirmacion, exigirPasswordSegura } from '../../common/utils/password-politica.js';
 import { FUNCION, funcionesDeRol } from '../../common/permisos/funciones.js';
 import { modulosDeRol } from '../../common/permisos/modulos-navegacion.js';
-import { JWT_ACCESS_DEFAULT, JWT_REFRESH_DEFAULT, JWT_SIGN_OPTIONS, JWT_VERIFY_OPTIONS } from './jwt.config.js';
+import { JWT_ACCESS_DEFAULT, JWT_REFRESH_DEFAULT, JWT_REFRESH_MOVIL, JWT_SIGN_OPTIONS, JWT_VERIFY_OPTIONS } from './jwt.config.js';
 import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 /** Hash descartable (mismo costo que los reales) para comparar cuando el correo no existe. */
@@ -58,12 +58,12 @@ export class AuthService {
     return { puedeUsarApp, pantallasApp };
   }
 
-  private async generateTokens(user: { id: string; email: string; roleId: string }, familyId: string = randomUUID()) {
+  private async generateTokens(user: { id: string; email: string; roleId: string }, familyId: string = randomUUID(), web = false) {
     const accessSecret = secretoObligatorio(this.configService.get<string>('JWT_SECRET'), 'JWT_SECRET', 'EasyDrySecretKey2026*OfflineSync');
     const accessExpiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRATION') || JWT_ACCESS_DEFAULT;
 
     const refreshSecret = secretoObligatorio(this.configService.get<string>('JWT_REFRESH_SECRET'), 'JWT_REFRESH_SECRET', 'EasyDryRefreshSecretKey2026*OfflineSync');
-    const refreshExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRATION') || JWT_REFRESH_DEFAULT;
+    const refreshExpiresIn = web ? this.configService.get<string>('JWT_REFRESH_EXPIRATION') || JWT_REFRESH_DEFAULT : JWT_REFRESH_MOVIL;
 
     const accessPayload = {
       sub: user.id,
@@ -158,7 +158,7 @@ export class AuthService {
    * Cambio de contraseña por el propio usuario. Solo Super Administrador y Administrador: el resto la recibe de un administrador.
    * Pide la contraseña actual, aplica la política de contraseñas, cierra todas las sesiones (también la actual) y deja constancia.
    */
-  async cambiarPasswordPropia(userId: string, dto: { passwordActual: string; passwordNueva: string }): Promise<{ ok: true }> {
+  async cambiarPasswordPropia(userId: string, dto: { passwordActual: string; passwordNueva: string; passwordConfirmacion?: string }): Promise<{ ok: true }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
     if (!user) throw new UnauthorizedException('Sesión no válida.');
     if (!funcionesDeRol(user.role?.capacidades, user.role?.namerol).has(FUNCION.ADMINISTRADOR)) {
@@ -171,6 +171,7 @@ export class AuthService {
     }
     if (nueva === actual) throw new BadRequestException('La nueva contraseña debe ser distinta de la actual.');
     exigirPasswordSegura(nueva, user.email);
+    exigirConfirmacion(nueva, dto.passwordConfirmacion);
 
     const passwordHash = await bcrypt.hash(nueva, 10);
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
@@ -226,7 +227,7 @@ export class AuthService {
     return { success: true };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto, web = false) {
     const { password } = loginDto;
     const email = loginDto.email.toLowerCase().trim();
     // El bloqueo por intentos y la búsqueda del usuario no dependen uno del otro: se piden a la vez.
@@ -275,7 +276,7 @@ export class AuthService {
     }
     // Tokens (crea la sesión), bahía asignada y pantallas de la app no dependen entre sí: se piden a la vez.
     const [{ accessToken, refreshToken }, bahiaAsignada, infoApp] = await Promise.all([
-      this.generateTokens(user),
+      this.generateTokens(user, undefined, web),
       this.prisma.bahiaOperador.findFirst({
         where: { operadorId: user.id, activo: true },
         include: { bahia: { select: { id: true, nombre: true } } },
@@ -419,7 +420,7 @@ export class AuthService {
         if (!soloAcceso) throw new UnauthorizedException('Sesión no válida');
         tokens = { accessToken: this.emitirAccessToken(user), refreshToken: '' };
       } else {
-        tokens = await this.generateTokens(user, sesion.familyId);
+        tokens = await this.generateTokens(user, sesion.familyId, soloAcceso);
       }
     }
 
