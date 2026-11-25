@@ -57,11 +57,17 @@ export class TimbradasService {
    *  - OPERADOR: solo en su agencia asignada. El técnico, que trabaja en varias agencias, en cualquiera de su región.
    * Si el rol no trae categoría (sesiones antiguas, pruebas con roles armados a mano) se decide por el nombre del rol, como antes.
    */
+  /** Pulidor móvil = pulidor sin agencia asignada (el fijo siempre tiene una). */
+  private esPulidorMovil(user: any): boolean {
+    return tieneFuncion(user, FUNCION.PULIDOR) && !user?.agenciaId;
+  }
+
   private modoDe(user: any): ModoTimbrada {
     const categoria = user?.roleDetails?.categoria ?? user?.role?.categoria;
     if (categoria === 'ADMINISTRACION') return 'CUALQUIER_AGENCIA';
-    if (categoria === 'OPERADOR') return tieneFuncion(user, FUNCION.TECNICO) ? 'CUALQUIER_AGENCIA' : 'AGENCIA_ASIGNADA';
+    if (categoria === 'OPERADOR') return tieneFuncion(user, FUNCION.TECNICO) || this.esPulidorMovil(user) ? 'CUALQUIER_AGENCIA' : 'AGENCIA_ASIGNADA';
     if (tieneAlgunaFuncion(user, [FUNCION.COORD_BODEGA, FUNCION.ASISTENTE_BODEGA])) return 'BODEGA';
+    if (tieneFuncion(user, FUNCION.PULIDOR)) return user?.agenciaId ? 'AGENCIA_ASIGNADA' : 'CUALQUIER_AGENCIA';
     if (tieneAlgunaFuncion(user, [FUNCION.LAVADOR, FUNCION.AUXILIAR, FUNCION.LIDER, FUNCION.BACKUP, FUNCION.LIDER_AGENCIA])) return 'AGENCIA_ASIGNADA';
     return 'CUALQUIER_AGENCIA';
   }
@@ -84,7 +90,8 @@ export class TimbradasService {
     }
     // Cualquier agencia: solo cuentan las activas con ubicación guardada; si ninguna la tiene, no se puede timbrar.
     // El técnico (rol operador con categoría) solo en las de su región; sin región asignada no tiene dónde timbrar.
-    const soloSuRegion = (user?.roleDetails?.categoria ?? user?.role?.categoria) === 'OPERADOR' && tieneFuncion(user, FUNCION.TECNICO);
+    // El pulidor móvil (sin agencia) se valida igual que el técnico: en las agencias con ubicación de su región.
+    const soloSuRegion = this.esPulidorMovil(user) || ((user?.roleDetails?.categoria ?? user?.role?.categoria) === 'OPERADOR' && tieneFuncion(user, FUNCION.TECNICO));
     if (soloSuRegion && !user.regionId) return [];
     const agencias = await this.prisma.agencia.findMany({
       where: { estado: 1, latitud: { not: null }, longitud: { not: null }, ...(soloSuRegion ? { regionId: user.regionId } : {}) },
