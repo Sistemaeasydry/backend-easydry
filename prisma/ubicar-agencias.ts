@@ -3,21 +3,23 @@
  * timbradas de RRHH.
  *
  *  1. Une cada fila del Excel con una agencia de la base por su nombre.
- *  2. Guarda el texto de la dirección en `Agencia.direccion` (solo si está vacía).
- *  3. Busca las coordenadas de esa dirección en OpenStreetMap (Nominatim, gratis, a 1 consulta por segundo) y las deja en un CSV de
- *     revisión en `_respaldos/` (con un enlace de Google Maps por fila). NO las guarda en la agencia salvo que se pida con
- *     `--con-ubicacion`: las direcciones del Excel son vagas («frente a…», «sector…») y el buscador suele devolver el punto de
- *     referencia (un hospital, un aeropuerto) y no la agencia; la timbrada exige estar a 100 m, así que un punto errado deja a todos
- *     sin poder timbrar. La ubicación exacta se fija en el mapa de cada agencia (RRHH › Ubicación) o parado en el sitio con
- *     «Usar mi ubicación».
+ *  2. Busca las coordenadas de esa dirección en OpenStreetMap (Nominatim, gratis, a 1 consulta por segundo) y las deja en un CSV de
+ *     revisión en `_respaldos/` (con un enlace de Google Maps por fila).
+ *  3. Con `--aplicar` guarda `Agencia.latitud` y `Agencia.longitud` (la ubicación con la que RRHH valida la timbrada) de los lugares
+ *     concretos que encuentre. Las calles y sectores se omiten: las direcciones del Excel son vagas («frente a…», «sector…») y el
+ *     buscador puede devolver un punto de referencia en vez de la agencia; la timbrada exige estar a 100 m, así que un punto errado
+ *     deja a todos sin poder timbrar. Esas se fijan en el mapa de la agencia (RRHH › Ubicación) o con «Usar mi ubicación».
+ *     El texto de la dirección (`Agencia.direccion`, el campo «Dirección de la agencia» del Admin) se guarda por defecto con lo del Excel;
+ *     con `--sin-direccion` no se escribe.
  *
  * Uso:
  *   npm run prisma:ubicar-agencias                       simula: consulta y genera el CSV, no escribe en la base
- *   npm run prisma:ubicar-agencias -- --aplicar          guarda solo las direcciones (texto) en las agencias que no tienen
+ *   npm run prisma:ubicar-agencias -- --aplicar          guarda latitud/longitud en las agencias que no tienen ubicación
  *   npm run prisma:ubicar-agencias -- ruta.xlsx          otro archivo (por defecto el de la raíz del proyecto)
- *   --con-ubicacion                                      además guarda las coordenadas de los lugares concretos que encuentre (revisa antes el CSV)
- *   --incluir-aproximadas                                con --con-ubicacion, guarda también calles y sectores (no recomendado)
- *   --sobrescribir                                       reemplaza dirección y ubicación aunque la agencia ya las tenga
+ *   --sin-direccion                                      no guarda el texto de la dirección (por defecto sí, en «Dirección de la agencia»)
+ *   --sin-ubicacion                                      no guarda coordenadas
+ *   --incluir-aproximadas                                guarda también calles y sectores (no recomendado)
+ *   --sobrescribir                                       reemplaza ubicación (y dirección si aplica) aunque la agencia ya la tenga
  *   --sin-red                                            no consulta OpenStreetMap: solo une el Excel con las agencias
  *   --solo-direcciones                                   solo direcciones (implica --sin-red): ni lee ni escribe latitud/longitud, para una base que aún no tiene esas columnas
  *
@@ -33,10 +35,12 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const APLICAR = args.includes('--aplicar');
-const CON_UBICACION = args.includes('--con-ubicacion');
+const SOLO_DIRECCIONES = args.includes('--solo-direcciones');
+// La ubicación (latitud/longitud) es lo que usa RRHH para timbrar; el texto `direccion` es el campo «Dirección de la agencia» del Admin. Ambos se guardan por defecto.
+const CON_DIRECCION = SOLO_DIRECCIONES || !args.includes('--sin-direccion');
+const CON_UBICACION = !SOLO_DIRECCIONES && !args.includes('--sin-ubicacion');
 const APROXIMADAS = args.includes('--incluir-aproximadas');
 const SOBRESCRIBIR = args.includes('--sobrescribir');
-const SOLO_DIRECCIONES = args.includes('--solo-direcciones');
 const SIN_RED = args.includes('--sin-red') || SOLO_DIRECCIONES;
 const XLSX_PATH = path.resolve(args.find((a) => !a.startsWith('--')) ?? path.join(__dirname, '..', '..', 'DIRECCIONES DE AGENCIAS.xlsx'));
 
@@ -180,25 +184,50 @@ function calidadDe(r: { addresstype?: string; class?: string; type?: string }): 
   return 'ZONA';
 }
 
+/** OpenStreetMap bloqueó o limitó las consultas: no tiene sentido seguir (insistir alarga el bloqueo). */
+class ErrorBloqueo extends Error {}
+
+// Caché de respuestas: repetir el script no vuelve a consultar lo que ya se buscó (la política de Nominatim limita el volumen).
+const CACHE_PATH = path.join(__dirname, '..', '..', '_respaldos', 'geocache-nominatim.json');
+const cache: Record<string, Hallazgo | null> = fs.existsSync(CACHE_PATH) ? JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8')) : {};
+const guardarCache = () => {
+  fs.mkdirSync(path.dirname(CACHE_PATH), { recursive: true });
+  fs.writeFileSync(CACHE_PATH, JSON.stringify(cache));
+};
+
 let ultimaConsulta = 0;
+let fallosSeguidos = 0;
 async function buscar(q: string): Promise<Hallazgo | null> {
+  if (q in cache) return cache[q];
   const espera = 1100 - (Date.now() - ultimaConsulta);
   if (espera > 0) await new Promise((r) => setTimeout(r, espera));
   ultimaConsulta = Date.now();
   const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ec&addressdetails=0&q=${encodeURIComponent(q)}`;
-  for (let intento = 0; intento < 3; intento++) {
-    const res = await fetch(url, { headers: { 'User-Agent': 'ubicar-agencias-script/1.0', 'Accept-Language': 'es' } });
-    if (res.status === 429 || res.status >= 500) {
-      await new Promise((r) => setTimeout(r, 5000 * (intento + 1)));
-      continue;
+  let estado = 0;
+  for (let intento = 0; intento < 2; intento++) {
+    try {
+      // Tiempo límite: sin él, una consulta que no responde deja el script colgado para siempre.
+      const res = await fetch(url, { headers: { 'User-Agent': 'easydry-ubicar-agencias/1.0', 'Accept-Language': 'es' }, signal: AbortSignal.timeout(15000) });
+      estado = res.status;
+      if (res.status === 429 || res.status >= 500 || res.status === 403) {
+        await new Promise((r) => setTimeout(r, 5000 * (intento + 1)));
+        continue;
+      }
+      if (!res.ok) throw new Error(`Nominatim respondió ${res.status}`);
+      const lista = (await res.json()) as Array<{ lat: string; lon: string; display_name: string; addresstype?: string; class?: string; type?: string }>;
+      const r = lista[0];
+      const h: Hallazgo | null = r ? { lat: Number(r.lat), lng: Number(r.lon), calidad: calidadDe(r), nombre: r.display_name, tipo: `${r.class ?? ''}/${r.type ?? ''}` } : null;
+      fallosSeguidos = 0;
+      cache[q] = h; // solo se guarda una respuesta real (con o sin resultado), nunca un error
+      guardarCache();
+      return h;
+    } catch (e) {
+      if (e instanceof Error && e.name !== 'TimeoutError' && !/fetch failed/.test(e.message)) throw e;
     }
-    if (!res.ok) return null;
-    const lista = (await res.json()) as Array<{ lat: string; lon: string; display_name: string; addresstype?: string; class?: string; type?: string }>;
-    const r = lista[0];
-    if (!r) return null;
-    return { lat: Number(r.lat), lng: Number(r.lon), calidad: calidadDe(r), nombre: r.display_name, tipo: `${r.class ?? ''}/${r.type ?? ''}` };
   }
-  return null;
+  // Un error NO es «no encontrada»: antes se devolvía null y se confundía con una dirección sin resultado.
+  if (++fallosSeguidos >= 3) throw new ErrorBloqueo(`OpenStreetMap no responde (último estado: ${estado || 'sin respuesta'}). Probablemente limitó o bloqueó esta IP; espera un rato y vuelve a correr (lo ya consultado queda en caché).`);
+  throw new Error(`Nominatim no respondió (estado ${estado || 'sin respuesta'})`);
 }
 
 const csv = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -269,6 +298,7 @@ async function main() {
           }
         }
       } catch (e) {
+        if (e instanceof ErrorBloqueo) throw e; // se detiene todo: no se escribe nada en la base con datos a medias
         r.h = null;
         console.warn(`  ${r.agencia!.nombre}: no se pudo consultar (${e instanceof Error ? e.message : e})`);
       }
@@ -299,7 +329,7 @@ async function main() {
   console.log(`\nCSV de revisión: ${archivo}`);
 
   if (!APLICAR) {
-    console.log('\nNo se escribió nada en la base. Para guardar las direcciones: npm run prisma:ubicar-agencias -- --aplicar');
+    console.log('\nNo se escribió nada en la base. Para guardar las ubicaciones (latitud/longitud): npm run prisma:ubicar-agencias -- --aplicar');
     return;
   }
 
@@ -310,8 +340,8 @@ async function main() {
     const data: { direccion?: string; latitud?: number; longitud?: number } = {};
     // «SIN DIRECCION» es el relleno que dejó una carga anterior: cuenta como vacío.
     const vacia = !a.direccion || /^\s*sin\s+direcci[oó]n\s*$/i.test(a.direccion);
-    if (r.f.direccion && (SOBRESCRIBIR || vacia)) data.direccion = r.f.direccion;
-    const guardable = !SOLO_DIRECCIONES && CON_UBICACION && r.h && (r.h.calidad === 'LUGAR' || APROXIMADAS);
+    if (CON_DIRECCION && r.f.direccion && (SOBRESCRIBIR || vacia)) data.direccion = r.f.direccion;
+    const guardable = CON_UBICACION && r.h && (r.h.calidad === 'LUGAR' || APROXIMADAS);
     if (guardable && (SOBRESCRIBIR || a.latitud === null || a.longitud === null)) {
       data.latitud = r.h!.lat;
       data.longitud = r.h!.lng;
@@ -322,7 +352,8 @@ async function main() {
     if (data.direccion) dirs++;
     if (data.latitud !== undefined) ubic++;
   }
-  console.log(`\nGuardado: ${dirs} direcciones y ${ubic} ubicaciones.`);
+  console.log(`\nGuardado: ${ubic} ubicaciones (latitud/longitud)${CON_DIRECCION ? ` y ${dirs} direcciones` : ''}.`);
+  if (!APROXIMADAS) console.log('Las agencias aproximadas (calle o sector) no se guardaron: revisa el CSV y fíjalas en RRHH › Ubicación, o usa --incluir-aproximadas.');
 }
 
 main()
