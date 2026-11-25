@@ -43,7 +43,7 @@ const LECTURA_COMERCIAL: CodigoPermiso[] = p(
  * Roles que no ven precios ni costos. Los coordinadores (en su región) y el Jefe Comercial sí los ven. El líder de agencia
  * (y su reemplazo BACKUP y el auxiliar, que copian sus permisos) trabaja con cantidades: nunca ve dinero.
  */
-const ROLES_SIN_PRECIOS = ['LAVADOR', 'LIDER', 'BACKUP', 'AUXILIAR', 'TALENTO_HUMANO'];
+const ROLES_SIN_PRECIOS = ['LAVADOR', 'LIDER', 'BACKUP', 'AUXILIAR', 'TALENTO_HUMANO', 'CONTABILIDAD', 'MARKETING'];
 /** Roles que ven inventario pero no el stock de los kits (hoy ninguno: los comerciales y los coordinadores también lo ven). */
 const ROLES_SIN_KITS: string[] = [];
 
@@ -54,7 +54,7 @@ const ROLES_SIN_KITS: string[] = [];
  */
 const ROLES_SOLO_VEN_AUDITORIA = ['LIDER', 'BACKUP', 'AUXILIAR', 'LAVADOR', 'PULIDOR'];
 /** El aprobador solo aprueba servicios: no tiene informes de inspección ni auditorías 5S. */
-const ROLES_SIN_AUDITORIA = ['APROBADOR', 'TALENTO_HUMANO'];
+const ROLES_SIN_AUDITORIA = ['APROBADOR', 'TALENTO_HUMANO', 'CONTABILIDAD', 'MARKETING'];
 const ROLES_REVISAN_INFORMES = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR'];
 const CAPACIDADES_AUDITOR: CodigoPermiso[] = p(
   'informes.ver',
@@ -421,6 +421,19 @@ export const ROLES_BASE: RolBase[] = [
       'reportes.pdf',
       'sync.usar',
     ),
+  },
+  // Personal de oficina: solo usa Tareas (las propias) y Timbradas (marcar la suya). Las capacidades de RRHH las agrega el bloque de abajo.
+  {
+    namerol: 'CONTABILIDAD',
+    descripcion: 'Contabilidad: personal de oficina que solo usa Tareas (las que le asignan) y Timbradas (para registrar su propia timbrada).',
+    ambito: 'GLOBAL',
+    capacidades: [],
+  },
+  {
+    namerol: 'MARKETING',
+    descripcion: 'Marketing: personal de oficina que solo usa Tareas (las que le asignan) y Timbradas (para registrar su propia timbrada).',
+    ambito: 'GLOBAL',
+    capacidades: [],
   },
 ];
 

@@ -10,6 +10,7 @@ import { normalizarRol } from './alias-roles.js';
 import { tienePermiso, tieneAlgunPermiso } from './capacidades.js';
 import { accionesLegacy } from './acciones-legacy.js';
 import { REPORTES } from '../../modules/reportes/reportes.definiciones.js';
+import { modulosDeCapacidades } from './modulos-navegacion.js';
 
 const rolesCon = (codigo: string): string[] =>
   ROLES_BASE.filter((r) => r.capacidades.includes(codigo as never))
@@ -33,9 +34,9 @@ describe('catálogo de permisos', () => {
       expect(p.codigo).toMatch(/^[a-z]+(\.[a-z]+)+$/);
   });
 
-  it('los 17 roles oficiales existen, sin repetir, con ámbito válido y solo permisos del catálogo', () => {
-    expect(ROLES_BASE).toHaveLength(17);
-    expect(new Set(ROLES_BASE.map((r) => r.namerol)).size).toBe(17);
+  it('los 19 roles oficiales existen, sin repetir, con ámbito válido y solo permisos del catálogo', () => {
+    expect(ROLES_BASE).toHaveLength(19);
+    expect(new Set(ROLES_BASE.map((r) => r.namerol)).size).toBe(19);
     for (const r of ROLES_BASE) {
       expect(AMBITOS).toContain(r.ambito);
       for (const c of r.capacidades) expect(esCodigoPermiso(c), `${r.namerol}: ${c} fuera del catálogo`).toBe(true);
@@ -87,7 +88,7 @@ describe('matriz acordada de permisos por rol', () => {
   it('auditar (hacer informes de inspección y auditorías 5S) lo pueden todos los roles menos líder, Backup, auxiliar, lavador y pulidor', () => {
     const noAudita = ['AUXILIAR', 'BACKUP', 'LAVADOR', 'LIDER', 'PULIDOR'];
     // El aprobador solo aprueba servicios: no tiene informes ni auditorías 5S.
-    const auditan = ROLES_BASE.map((r) => r.namerol).filter((n) => !noAudita.includes(n) && n !== 'APROBADOR' && n !== 'TALENTO_HUMANO').sort();
+    const auditan = ROLES_BASE.map((r) => r.namerol).filter((n) => !noAudita.includes(n) && n !== 'APROBADOR' && n !== 'TALENTO_HUMANO' && n !== 'CONTABILIDAD' && n !== 'MARKETING').sort();
     const caps0 = ROLES_BASE.find((r) => r.namerol === 'APROBADOR')!.capacidades;
     expect(caps0.filter((c) => /^(informes|inspecciones|auditorias)\./.test(c))).toEqual([]);
     expect(rolesCon('informes.crear')).toEqual(auditan);
@@ -515,5 +516,15 @@ describe('acciones para la web derivadas de los permisos', () => {
     expect(
       Object.values(accionesLegacy([], 'AGENCIA')).every((v) => v === false),
     ).toBe(true);
+  });
+});
+
+describe('personal de oficina (Contabilidad y Marketing)', () => {
+  it.each(['CONTABILIDAD', 'MARKETING'])('%s solo usa Tareas propias y Timbradas propias, con timbrada obligatoria', (n) => {
+    const r = ROLES_BASE.find((b) => b.namerol === n)!;
+    expect(r.capacidades).toEqual(expect.arrayContaining(['rrhh.timbrar', 'rrhh.tareas.propias', 'rrhh.timbrada.obligatoria']));
+    expect(r.capacidades).not.toEqual(expect.arrayContaining(['rrhh.tareas.asignar']));
+    expect(r.capacidades).not.toEqual(expect.arrayContaining(['rrhh.timbradas.ver']));
+    expect(modulosDeCapacidades(r.capacidades, n).sort()).toEqual(['notificaciones', 'perfil', 'rrhh/tareas', 'rrhh/timbradas']);
   });
 });

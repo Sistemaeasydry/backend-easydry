@@ -2485,5 +2485,101 @@
       "despacharSuministros": false,
       "accionesEnvios": false
     }
+  },
+  {
+    "namerol": "CONTABILIDAD",
+    "descripcion": "Contabilidad: personal de oficina que solo usa Tareas (las que le asignan) y Timbradas (para registrar su propia timbrada).",
+    "estado": 1,
+    "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
+    "permisos": [
+      "notificaciones",
+      "rrhh/tareas",
+      "rrhh/timbradas",
+      "perfil"
+    ],
+    "capacidades": [
+      "rrhh.timbrar",
+      "rrhh.tareas.propias",
+      "rrhh.timbrada.obligatoria",
+      "pagina.notificaciones",
+      "pagina.rrhh-tareas",
+      "pagina.rrhh-tareas.mis",
+      "pagina.rrhh-timbradas",
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh-timbradas.marcar.obligatoria",
+      "pagina.perfil"
+    ],
+    "acciones": {
+      "verTodasSucursales": false,
+      "crearSucursal": false,
+      "editarSucursal": false,
+      "crearUsuarios": false,
+      "asignarRoles": false,
+      "verOtrosSucursales": false,
+      "cambiarSucursalOperador": false,
+      "cambiarBahiaOperador": false,
+      "aprobarServicios": false,
+      "rechazarServicios": false,
+      "registrarServicio": false,
+      "verTodosServicios": false,
+      "verMaquinaria": false,
+      "gestionarMantenimiento": false,
+      "registrarIncidente": false,
+      "verReportes": false,
+      "verProductividadGlobal": false,
+      "verConfiguracion": false,
+      "gestionarInventario": false,
+      "despacharSuministros": false,
+      "accionesEnvios": false
+    }
+  },
+  {
+    "namerol": "MARKETING",
+    "descripcion": "Marketing: personal de oficina que solo usa Tareas (las que le asignan) y Timbradas (para registrar su propia timbrada).",
+    "estado": 1,
+    "ambito": "GLOBAL",
+    "categoria": "ADMINISTRACION",
+    "permisos": [
+      "notificaciones",
+      "rrhh/tareas",
+      "rrhh/timbradas",
+      "perfil"
+    ],
+    "capacidades": [
+      "rrhh.timbrar",
+      "rrhh.tareas.propias",
+      "rrhh.timbrada.obligatoria",
+      "pagina.notificaciones",
+      "pagina.rrhh-tareas",
+      "pagina.rrhh-tareas.mis",
+      "pagina.rrhh-timbradas",
+      "pagina.rrhh-timbradas.marcar",
+      "rrhh-timbradas.marcar.obligatoria",
+      "pagina.perfil"
+    ],
+    "acciones": {
+      "verTodasSucursales": false,
+      "crearSucursal": false,
+      "editarSucursal": false,
+      "crearUsuarios": false,
+      "asignarRoles": false,
+      "verOtrosSucursales": false,
+      "cambiarSucursalOperador": false,
+      "cambiarBahiaOperador": false,
+      "aprobarServicios": false,
+      "rechazarServicios": false,
+      "registrarServicio": false,
+      "verTodosServicios": false,
+      "verMaquinaria": false,
+      "gestionarMantenimiento": false,
+      "registrarIncidente": false,
+      "verReportes": false,
+      "verProductividadGlobal": false,
+      "verConfiguracion": false,
+      "gestionarInventario": false,
+      "despacharSuministros": false,
+      "accionesEnvios": false
+    }
   }
 ]
