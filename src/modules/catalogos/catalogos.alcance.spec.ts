@@ -53,6 +53,11 @@ describe('CatalogosService.listServicios — alcance (base real)', () => {
   };
   const ordenados = (...s: Array<{ id: number }>) => s.map((x) => x.id).sort((a, b) => a - b);
 
+  it('El Jefe Comercial ve todo el catálogo aunque tenga una sede cargada', async () => {
+    const { ids } = await buscar({}, { namerol: 'JEFE_COMERCIAL', agenciaId: vacia.id });
+    expect(ids).toEqual(ordenados(express, premium, pulido, fuera));
+  });
+
   it('Admin y Súper Admin ven todo el catálogo aunque tengan sede', async () => {
     for (const namerol of ['ADMIN', 'SUPER_ADMIN']) {
       const { ids } = await buscar({}, { namerol, agenciaId: norte.id });

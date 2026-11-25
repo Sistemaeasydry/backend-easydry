@@ -37,7 +37,8 @@ export class CatalogosService {
     // Líder (y quien actúa como él) y aprobador: su catálogo se acota a Agencia.servicioIds aunque no tengan sede (entonces no ven nada).
     const isScopedRole = funciones.has(FUNCION.LIDER_AGENCIA) || funciones.has(FUNCION.APROBADOR);
     // Regla única de alcance: quien no es administrador y tiene sede queda limitado a los servicios de su sede.
-    const sinAlcance = funciones.has(FUNCION.ADMINISTRADOR);
+    // El Jefe Comercial (comercial nacional) ve todo el catálogo aunque tenga una sede cargada.
+    const sinAlcance = funciones.has(FUNCION.ADMINISTRADOR) || funciones.has(FUNCION.COMERCIAL_NACIONAL);
     const acotadoPorSede = !sinAlcance && !!userCtx?.agenciaId;
     // Con sede (o rol de sede) manda SIEMPRE la agencia del usuario; la que mande el cliente solo cuenta para administradores.
     const efectiveAgenciaId = acotadoPorSede || isScopedRole ? userCtx?.agenciaId : dto?.agenciaId || userCtx?.agenciaId;
