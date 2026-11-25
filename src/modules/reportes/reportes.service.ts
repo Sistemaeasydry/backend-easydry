@@ -110,7 +110,7 @@ const ESTADO_DIA_RRHH: Record<string, string> = {
 const REPORTES_DEL_APROBADOR = ['servicios-lavado', 'servicios-generales-anulados', 'servicios-especiales-anulados'];
 
 /** Nombre de cada tipo de informe de inspección tal como se ve en la pantalla (con sus tildes). */
-const TIPO_INSPECCION: Record<string, string> = { RUTINA: 'Rutina', SEGUIMIENTO: 'Seguimiento', EXTRAORDINARIA: 'Extraordinaria', CIERRE_MENSUAL: 'Cierre mensual', APERTURA_AGENCIA: 'Apertura de agencia', CIERRE_AGENCIA: 'Cierre de agencia', NOVEDADES: 'Novedades', MANTENIMIENTO_COMERCIAL: 'Mantenimiento comercial', COLISION: 'Colisión', REPARACION: 'Reparación' };
+const TIPO_INSPECCION: Record<string, string> = { RUTINA: 'Rutina', SEGUIMIENTO: 'Seguimiento', EXTRAORDINARIA: 'Extraordinaria', CIERRE_MENSUAL: 'Cierre mensual', APERTURA_AGENCIA: 'Apertura de agencia', CIERRE_AGENCIA: 'Cierre de agencia', NOVEDADES: 'Novedades', MANTENIMIENTO_COMERCIAL: 'Mantenimiento', COLISION: 'Colisión', REPARACION: 'Reparación' };
 
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 const dinero = (v: unknown): number | null => (v === null || v === undefined ? null : Math.round(Number(v) * 100) / 100);
