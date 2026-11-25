@@ -3,11 +3,14 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { resolverAlcance } from '../../common/permisos/alcance.js';
 import { FUNCION, rolConFuncion } from '../../common/permisos/funciones.js';
-import type { EditarAjusteDto, EditarHorarioDto } from './dto/rrhh.dto.js';
+import type { ActivarFinesDeSemanaDto, EditarAjusteDto, EditarHorarioDto } from './dto/rrhh.dto.js';
 import { diaComoFecha, fechaEnEcuador, personaEnAlcance, whereUsuariosEnAlcance } from './rrhh.reglas.js';
 import {
   AJUSTE_POR_DEFECTO,
   aMinutos,
+  esFechaValida,
+  esFinDeSemana,
+  FINES_DE_SEMANA_MAX_DIAS_ADELANTE,
   horarioPorDefectoDe,
   evaluarDia,
   indiceDiaSemana,
@@ -34,6 +37,9 @@ export type FilaEvaluacion = EvaluacionDia & { userId: string; dia: string };
 /** Semana de una versión; sin versión rige el horario por defecto que había ese día (`diaStr`, AAAA-MM-DD). */
 const semanaDe = (v: { dias: unknown } | null | undefined, diaStr: string): SemanaHorario => (v && Array.isArray(v.dias) ? (v.dias as SemanaHorario) : horarioPorDefectoDe(diaStr));
 const ajusteDe = (v: VersionAjuste | null): AjusteHorario | null => (v ? { toleranciaMin: v.toleranciaMin, ventanaMin: v.ventanaMin } : null);
+/** Fin de semana activado solo por una fecha (no anulado). */
+interface Excepcion { id: string; userId: string; fecha: Date; entrada: string; salida: string; motivo: string }
+const claveExcepcion = (userId: string, diaStr: string) => `${userId}|${diaStr}`;
 
 /**
  * Horarios del personal y ajuste general de timbradas. Todo cambio crea una versión nueva que rige desde mañana (nunca desde hoy ni hacia
@@ -57,12 +63,15 @@ export class HorariosService {
 
   /** Horario del día y ajuste vigente para una persona: lo que necesita la timbrada. */
   async contextoDe(userId: string, diaStr: string): Promise<{ dia: DiaHorario; ajuste: AjusteHorario }> {
-    const [versiones, ajustes] = await Promise.all([
+    const [versiones, ajustes, excepcion] = await Promise.all([
       this.prisma.horarioPersona.findMany({ where: { userId, vigenteDesde: { lte: diaComoFecha(diaStr) } } }),
       this.prisma.ajusteHorario.findMany({ where: { vigenteDesde: { lte: diaComoFecha(diaStr) } } }),
+      this.prisma.horarioExcepcion.findFirst({ where: { userId, fecha: diaComoFecha(diaStr), anuladaEn: null } }),
     ]);
     const semana = semanaDe(versionVigente(versiones, diaStr), diaStr);
-    return { dia: semana[indiceDiaSemana(diaStr)], ajuste: ajusteDe(versionVigente(ajustes, diaStr)) ?? AJUSTE_POR_DEFECTO };
+    // Un fin de semana activado solo por esa fecha manda sobre el horario semanal de ese día.
+    const base: DiaHorario = excepcion ? { trabaja: true, entrada: excepcion.entrada, salida: excepcion.salida } : semana[indiceDiaSemana(diaStr)];
+    return { dia: base, ajuste: ajusteDe(versionVigente(ajustes, diaStr)) ?? AJUSTE_POR_DEFECTO };
   }
 
   /** Lo que la pantalla de timbrar muestra: el horario de hoy, las ventanas y el ajuste. */
@@ -85,9 +94,10 @@ export class HorariosService {
     const primero = dia(desde);
     if (primero > ultimo) return [];
     const ids = personas.map((p) => p.id);
-    const [versiones, ajustes, marcasDb] = await Promise.all([
+    const [versiones, ajustes, excepciones, marcasDb] = await Promise.all([
       this.prisma.horarioPersona.findMany({ where: { userId: { in: ids }, vigenteDesde: { lte: diaComoFecha(ultimo) } } }),
       this.prisma.ajusteHorario.findMany({ where: { vigenteDesde: { lte: diaComoFecha(ultimo) } } }),
+      this.excepcionesEn(ids, primero, ultimo),
       marcas ? Promise.resolve(marcas) : this.prisma.timbrada.findMany({ where: { userId: { in: ids }, fechaDia: { gte: diaComoFecha(primero), lte: diaComoFecha(ultimo) } }, select: { userId: true, tipo: true, fechaDia: true, marcadaEn: true } }),
     ]);
 
@@ -107,11 +117,12 @@ export class HorariosService {
         const ajuste = ajusteDe(versionVigente(ajustes as VersionAjuste[], d));
         const semana = semanaDe(versionVigente(propias, d), d);
         const aplica = ajuste && d >= creada;
+        const extra = excepciones.get(claveExcepcion(p.id, d));
         filas.push({
           userId: p.id,
           dia: d,
           ...evaluarDia({
-            dia: aplica ? semana[indiceDiaSemana(d)] : null,
+            dia: aplica ? (extra ? { trabaja: true, entrada: extra.entrada, salida: extra.salida } : semana[indiceDiaSemana(d)]) : null,
             ajuste: aplica ? ajuste : null,
             entradaMin: minutoDeMarca.get(`${p.id}|${d}|ENTRADA`) ?? null,
             salidaMin: minutoDeMarca.get(`${p.id}|${d}|SALIDA`) ?? null,
@@ -122,6 +133,12 @@ export class HorariosService {
       }
     }
     return filas;
+  }
+
+  /** Fines de semana activados (no anulados) de unas personas entre dos días, por persona y día. */
+  private async excepcionesEn(ids: string[], desde: string, hasta: string): Promise<Map<string, Excepcion>> {
+    const filas = (await this.prisma.horarioExcepcion.findMany({ where: { userId: { in: ids }, anuladaEn: null, fecha: { gte: diaComoFecha(desde), lte: diaComoFecha(hasta) } } })) as Excepcion[];
+    return new Map(filas.map((x) => [claveExcepcion(x.userId, dia(x.fecha)), x]));
   }
 
   // ───────────────────────── Consultas ─────────────────────────
@@ -165,6 +182,10 @@ export class HorariosService {
     const versiones = (await this.prisma.horarioPersona.findMany({ where: { userId: { in: personas.map((p) => p.id) } } })) as VersionHorario[];
     const porPersona = new Map<string, VersionHorario[]>();
     for (const v of versiones) porPersona.set(v.userId, [...(porPersona.get(v.userId) ?? []), v]);
+    // Fines de semana activados que aún no pasan (de hoy en adelante), para mostrarlos y poder quitarlos.
+    const proximos = (await this.prisma.horarioExcepcion.findMany({ where: { userId: { in: personas.map((p) => p.id) }, anuladaEn: null, fecha: { gte: diaComoFecha(h.dia) } }, orderBy: { fecha: 'asc' } })) as Excepcion[];
+    const finesPorPersona = new Map<string, Excepcion[]>();
+    for (const x of proximos) finesPorPersona.set(x.userId, [...(finesPorPersona.get(x.userId) ?? []), x]);
     return {
       personas: personas.map((p) => {
         const propias = porPersona.get(p.id) ?? [];
@@ -178,6 +199,7 @@ export class HorariosService {
           semana: semanaDe(vigente, h.dia),
           porDefecto: !vigente,
           proximoCambio: proxima ? { vigenteDesde: dia(proxima.vigenteDesde), semana: semanaDe(proxima, dia(proxima.vigenteDesde)) } : null,
+          finesDeSemana: (finesPorPersona.get(p.id) ?? []).map((x) => ({ id: x.id, fecha: dia(x.fecha), entrada: x.entrada, salida: x.salida, motivo: x.motivo, hoy: dia(x.fecha) === h.dia })),
         };
       }),
       ajuste: await this.ajusteVista(),
@@ -253,6 +275,53 @@ export class HorariosService {
     return { ...(await this.vista(dto.userId)), mensaje: `El nuevo horario de ${nombreDe(persona)} rige desde el ${desde}.` };
   }
 
+  /**
+   * Activa solo por esas fechas uno o varios sábados o domingos de una persona (el horario semanal no cambia). Rigen desde mañana, como
+   * cualquier cambio de horario. Una fecha ya activada se ignora y un día que su horario semanal ya trabaja se rechaza.
+   */
+  async activarFinesDeSemana(dto: ActivarFinesDeSemanaDto, user: any) {
+    const motivo = (dto.motivo ?? '').trim();
+    if (motivo.length < 5) throw new BadRequestException('Escribe el motivo (mínimo 5 caracteres).');
+    if (aMinutos(dto.entrada) >= aMinutos(dto.salida)) throw new BadRequestException('La salida debe ser posterior a la entrada (no se admiten turnos que cruzan la medianoche).');
+    const hoy = this.hoy().dia;
+    const manana = sumarDias(hoy, 1);
+    const limite = sumarDias(hoy, FINES_DE_SEMANA_MAX_DIAS_ADELANTE);
+    const fechas = [...new Set(dto.fechas)].sort();
+    for (const f of fechas) {
+      if (!esFechaValida(f)) throw new BadRequestException(`La fecha ${f} no es válida.`);
+      if (!esFinDeSemana(f)) throw new BadRequestException(`El ${f} no es sábado ni domingo: esto es solo para fines de semana.`);
+      if (f < manana) throw new BadRequestException(`El ${f} ya empezó o pasó: solo se activan fines de semana desde mañana (${manana}).`);
+      if (f > limite) throw new BadRequestException(`El ${f} queda muy lejos: máximo ${FINES_DE_SEMANA_MAX_DIAS_ADELANTE} días hacia adelante.`);
+    }
+    const persona = await this.personaEnMiAlcance(dto.userId, user);
+    if (!persona.role?.capacidades?.includes('rrhh.timbrar')) throw new BadRequestException('Esta persona no timbra, así que no tiene horario.');
+
+    const [versiones, existentes] = await Promise.all([
+      this.prisma.horarioPersona.findMany({ where: { userId: dto.userId } }),
+      this.excepcionesEn([dto.userId], fechas[0], fechas[fechas.length - 1]),
+    ]);
+    const yaTrabaja = fechas.filter((f) => semanaDe(versionVigente(versiones as VersionHorario[], f), f)[indiceDiaSemana(f)].trabaja);
+    if (yaTrabaja.length) throw new BadRequestException(`${nombreDe(persona)} ya trabaja ese día en su horario semanal (${yaTrabaja.join(', ')}): no hace falta activarlo.`);
+    const nuevas = fechas.filter((f) => !existentes.has(claveExcepcion(dto.userId, f)));
+    if (nuevas.length) {
+      await this.prisma.horarioExcepcion.createMany({ data: nuevas.map((f) => ({ userId: dto.userId, fecha: diaComoFecha(f), entrada: dto.entrada, salida: dto.salida, motivo, actorId: String(user.id) })) });
+    }
+    return {
+      mensaje: nuevas.length ? `${nombreDe(persona)} trabajará ${nuevas.length === 1 ? 'el' : 'los'} ${nuevas.join(', ')} de ${dto.entrada} a ${dto.salida}.` : 'Esas fechas ya estaban activadas.',
+      creadas: nuevas,
+    };
+  }
+
+  /** Quita un fin de semana activado. Solo mientras el día no haya llegado; lo pasado queda como estuvo. */
+  async quitarFinDeSemana(id: string, user: any) {
+    const fila = await this.prisma.horarioExcepcion.findUnique({ where: { id } });
+    if (!fila || fila.anuladaEn) throw new NotFoundException('Ese fin de semana no está activado.');
+    const persona = await this.personaEnMiAlcance(fila.userId, user);
+    if (dia(fila.fecha) <= this.hoy().dia) throw new BadRequestException('Ese día ya empezó o pasó: no se puede quitar.');
+    await this.prisma.horarioExcepcion.update({ where: { id }, data: { anuladaEn: new Date(), anuladaPorId: String(user.id) } });
+    return { mensaje: `Se quitó el ${dia(fila.fecha)} de ${nombreDe(persona)}.` };
+  }
+
   async editarAjuste(dto: EditarAjusteDto, user: any) {
     const error = validarAjuste(dto);
     if (error) throw new BadRequestException(error);
@@ -320,6 +389,7 @@ export class HorariosService {
     ]);
     const ajuste = ajusteDe(versionVigente(ajustes as VersionAjuste[], h.dia));
     if (!ajuste) return 0;
+    const extras = await this.excepcionesEn(personas.map((p) => p.id), h.dia, h.dia);
     // El día en que se activan los horarios nadie tuvo el día completo para marcar: las alertas empiezan al día siguiente.
     const activacion = (ajustes as VersionAjuste[]).map((x) => dia(x.vigenteDesde)).sort()[0];
     if (h.dia <= activacion) return 0;
@@ -327,7 +397,8 @@ export class HorariosService {
     let avisadas = 0;
     for (const p of personas) {
       if (fechaEnEcuador(p.createdAt).dia > h.dia) continue;
-      const d = semanaDe(versionVigente((versiones as VersionHorario[]).filter((v) => v.userId === p.id), h.dia), h.dia)[indiceDiaSemana(h.dia)];
+      const extra = extras.get(claveExcepcion(p.id, h.dia));
+      const d: DiaHorario = extra ? { trabaja: true, entrada: extra.entrada, salida: extra.salida } : semanaDe(versionVigente((versiones as VersionHorario[]).filter((v) => v.userId === p.id), h.dia), h.dia)[indiceDiaSemana(h.dia)];
       if (!d.trabaja) continue;
       const tipos = porPersona.get(p.id) ?? new Set<string>();
       if (tipos.size === 0 && h.minuto > aMinutos(d.entrada) + ajuste.ventanaMin) {

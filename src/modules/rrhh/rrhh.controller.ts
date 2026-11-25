@@ -11,6 +11,8 @@ import {
   CompletarTareaDto,
   ConsultarTimbradasDto,
   CrearTareaDto,
+  ActivarFinesDeSemanaDto,
+  QuitarFinDeSemanaDto,
   EditarAjusteDto,
   EditarHorarioDto,
   EstadoTimbradaDto,
@@ -138,6 +140,22 @@ export class RrhhController {
   @ApiOperation({ summary: 'Editar el horario de una persona (rige desde mañana)' })
   editarHorario(@Body() dto: EditarHorarioDto, @CurrentUser() user: any) {
     return this.horarios.editar(dto, user);
+  }
+
+  @Permiso(...PERMISOS_EDITAR_HORARIO)
+  @Post('horarios/fin-semana/activar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Activar solo por esas fechas uno o varios sábados o domingos de una persona (desde mañana)' })
+  activarFinesDeSemana(@Body() dto: ActivarFinesDeSemanaDto, @CurrentUser() user: any) {
+    return this.horarios.activarFinesDeSemana(dto, user);
+  }
+
+  @Permiso(...PERMISOS_EDITAR_HORARIO)
+  @Post('horarios/fin-semana/quitar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Quitar un fin de semana activado (solo si el día aún no llegó)' })
+  quitarFinDeSemana(@Body() dto: QuitarFinDeSemanaDto, @CurrentUser() user: any) {
+    return this.horarios.quitarFinDeSemana(dto.id, user);
   }
 
   @Permiso('rrhh.timbrar', 'rrhh.timbradas.ver')

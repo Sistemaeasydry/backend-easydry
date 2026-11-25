@@ -4,6 +4,8 @@ import {
   HORARIO_POR_DEFECTO,
   HORARIO_POR_DEFECTO_ANTERIOR,
   HORARIO_POR_DEFECTO_DESDE,
+  esFechaValida,
+  esFinDeSemana,
   evaluarDia,
   horarioPorDefectoDe,
   indiceDiaSemana,
@@ -193,5 +195,21 @@ describe('evaluarDia', () => {
     expect(conMarca.salidaReal).toBe('13:58');
     expect(conMarca.observaciones).toEqual([]);
     expect(evaluarDia({ dia: DIA, ajuste: null, entradaMin: null, salidaMin: null }).estado).toBe('SIN_HORARIO');
+  });
+});
+
+describe('fines de semana activados solo por fecha', () => {
+  it('reconoce sábados y domingos y nada más', () => {
+    expect(esFinDeSemana('2026-11-28')).toBe(true); // sábado
+    expect(esFinDeSemana('2026-11-29')).toBe(true); // domingo
+    expect(esFinDeSemana('2026-11-27')).toBe(false); // viernes
+    expect(esFinDeSemana('2026-11-30')).toBe(false); // lunes
+  });
+
+  it('rechaza fechas con mala forma o que no existen', () => {
+    expect(esFechaValida('2026-11-28')).toBe(true);
+    expect(esFechaValida('2026-02-30')).toBe(false);
+    expect(esFechaValida('28/11/2026')).toBe(false);
+    expect(esFechaValida('')).toBe(false);
   });
 });

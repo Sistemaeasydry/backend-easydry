@@ -158,6 +158,35 @@ export class EditarHorarioDto {
   motivo!: string;
 }
 
+/** Activar fines de semana solo por esas fechas: sábados o domingos concretos, de una persona. */
+export class ActivarFinesDeSemanaDto {
+  @IsUUID()
+  userId!: string;
+
+  /** Fechas AAAA-MM-DD (sábado o domingo, desde mañana). */
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(8)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { each: true, message: 'cada fecha debe ser AAAA-MM-DD' })
+  fechas!: string[];
+
+  @Matches(HORA, { message: 'entrada debe ser HH:mm' })
+  entrada!: string;
+
+  @Matches(HORA, { message: 'salida debe ser HH:mm' })
+  salida!: string;
+
+  @IsString()
+  @MinLength(5)
+  @MaxLength(300)
+  motivo!: string;
+}
+
+export class QuitarFinDeSemanaDto {
+  @IsUUID()
+  id!: string;
+}
+
 export class EditarAjusteDto {
   @Type(() => Number)
   @IsInt()

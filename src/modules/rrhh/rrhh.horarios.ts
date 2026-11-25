@@ -88,6 +88,16 @@ export function indiceDiaSemana(dia: string): number {
   return (new Date(`${dia}T00:00:00.000Z`).getUTCDay() + 6) % 7;
 }
 
+/** Sábado o domingo (un `AAAA-MM-DD`). */
+export const esFinDeSemana = (dia: string): boolean => indiceDiaSemana(dia) >= 5;
+
+/** Fecha con forma AAAA-MM-DD que existe en el calendario. */
+export const esFechaValida = (dia: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(dia) && !Number.isNaN(Date.parse(`${dia}T00:00:00.000Z`)) && new Date(`${dia}T00:00:00.000Z`).toISOString().slice(0, 10) === dia;
+
+/** Cuántas fechas de fin de semana se pueden activar de una vez y hasta cuántos días hacia adelante. */
+export const FINES_DE_SEMANA_MAX_POR_VEZ = 8;
+export const FINES_DE_SEMANA_MAX_DIAS_ADELANTE = 180;
+
 export function sumarDias(dia: string, dias: number): string {
   const d = new Date(`${dia}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + dias);

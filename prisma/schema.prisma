@@ -158,6 +158,7 @@ model User {
   timbradas                      Timbrada[]
   entregasDotacion               EntregaDotacion[]
   horariosPersona                HorarioPersona[]
+  horariosExcepcion              HorarioExcepcion[]
   tareasRrhhRecibidas            TareaRrhh[]                  @relation("TareaAsignadoA")
   tareasRrhhAsignadas            TareaRrhh[]                  @relation("TareaAsignadoPor")
   serviciosAtendidos             ServicioLavado[]
@@ -2247,6 +2248,28 @@ model HorarioPersona {
 
   @@index([userId, vigenteDesde])
   @@map("horarios_persona")
+}
+
+/// Día de fin de semana (sábado o domingo) que una persona trabaja solo esa vez, aunque su horario semanal lo tenga libre.
+/// Se crea para fechas futuras y se anula (no se borra) mientras no haya llegado el día; lo pasado no se toca.
+model HorarioExcepcion {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  fecha        DateTime  @db.Date
+  /// HH:mm
+  entrada      String
+  /// HH:mm
+  salida       String
+  motivo       String
+  actorId      String
+  createdAt    DateTime  @default(now())
+  anuladaEn    DateTime?
+  anuladaPorId String?
+
+  @@index([userId, fecha])
+  @@index([fecha])
+  @@map("horarios_excepcion")
 }
 
 /// Versión del ajuste general de timbradas (tolerancia de puntualidad y ventana de timbrada). Inmutable y con fecha de inicio, como el horario.
