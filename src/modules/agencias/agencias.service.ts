@@ -3319,7 +3319,7 @@ export class AgenciasService {
 
   /** Filtro de operadores: rol (lavador / pulidor), agencia (un líder solo la suya) y estado. */
   private whereOperadores(
-    dto: { agenciaId?: string; estado?: number; rol?: string; categoriaRol?: string; bahiaNombre?: string; clienteNombre?: string },
+    dto: { agenciaId?: string; estado?: number; rol?: string; categoriaRol?: string; bahiaNombre?: string; clienteNombre?: string; regionNombre?: string },
     currentUser?: any,
   ): any {
     const isLider = !!currentUser && tieneFuncion(currentUser, FUNCION.LIDER_AGENCIA);
@@ -3366,6 +3366,11 @@ export class AgenciasService {
     }
     if (dto.clienteNombre?.trim()) {
       extra.push({ agencia: { cliente: { nombre: { equals: dto.clienteNombre.trim(), mode: 'insensitive' } } } });
+    }
+    // Región: la de la agencia asignada o, para quien no tiene agencia (pulidor móvil), la propia.
+    if (dto.regionNombre?.trim()) {
+      const region = { nombre: { equals: dto.regionNombre.trim(), mode: 'insensitive' } };
+      extra.push({ OR: [{ agencia: { regionRel: region } }, { agenciaId: null, region }] });
     }
     // El alcance del usuario manda sobre lo que pida el cliente.
     where.AND = [...extra, this.whereUsuariosPorAlcance(currentUser)];

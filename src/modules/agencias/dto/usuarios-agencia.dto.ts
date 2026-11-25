@@ -446,6 +446,11 @@ export class ListOperadoresDto extends PaginacionOpcionalDto {
   @IsOptional()
   @IsString()
   clienteNombre?: string;
+
+  @ApiPropertyOptional({ description: 'Nombre exacto de la región (la de la agencia asignada o, sin agencia, la de la persona)' })
+  @IsOptional()
+  @IsString()
+  regionNombre?: string;
 }
 
 export class CreateOperadorDto {
