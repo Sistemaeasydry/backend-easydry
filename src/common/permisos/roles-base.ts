@@ -419,21 +419,22 @@ export const ROLES_BASE: RolBase[] = [
       'reportes.ver',
       'reportes.excel',
       'reportes.pdf',
+      'retos.ver',
       'sync.usar',
     ),
   },
-  // Personal de oficina: solo usa Tareas (las propias) y Timbradas (marcar la suya). Las capacidades de RRHH las agrega el bloque de abajo.
+  // Personal de oficina: usa Tareas (las propias), Timbradas (marcar la suya) y ve los retos. Las capacidades de RRHH las agrega el bloque de abajo.
   {
     namerol: 'CONTABILIDAD',
-    descripcion: 'Contabilidad: personal de oficina que solo usa Tareas (las que le asignan) y Timbradas (para registrar su propia timbrada).',
+    descripcion: 'Contabilidad: personal de oficina que usa Tareas (las que le asignan), Timbradas (para registrar su propia timbrada) y ve los retos activos.',
     ambito: 'GLOBAL',
-    capacidades: [],
+    capacidades: p('retos.ver'),
   },
   {
     namerol: 'MARKETING',
-    descripcion: 'Marketing: personal de oficina que solo usa Tareas (las que le asignan) y Timbradas (para registrar su propia timbrada).',
+    descripcion: 'Marketing: personal de oficina que usa Tareas (las que le asignan), Timbradas (para registrar su propia timbrada) y ve los retos activos.',
     ambito: 'GLOBAL',
-    capacidades: [],
+    capacidades: p('retos.ver'),
   },
 ];
 
