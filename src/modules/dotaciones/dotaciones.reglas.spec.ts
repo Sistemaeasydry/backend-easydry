@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agruparPorAgencia, claveDestino, FIRMA_PNG, ocurrenciaVigente, personaEnPlan, sumarMeses } from './dotaciones.reglas.js';
+import { agruparPorAgencia, claveDestino, compararEntregas, FIRMA_PNG, momentoDeEntrega, ocurrenciaVigente, personaEnPlan, proximaOcurrencia, sumarMeses } from './dotaciones.reglas.js';
 
 describe('sumarMeses', () => {
   it('conserva el día y cruza de año', () => {
@@ -36,6 +36,67 @@ describe('ocurrenciaVigente', () => {
     expect(ocurrenciaVigente(o, '2026-11-30', '2026-11-19')).toBeNull();
     expect(ocurrenciaVigente(o, '2026-12-01', '2026-11-19')).toBe('2026-12-01');
     expect(ocurrenciaVigente(o, '2027-05-01', '2026-11-19')).toBe('2026-12-01');
+  });
+});
+
+describe('proximaOcurrencia', () => {
+  const fijo = { tipo: 'FIJO', fechaInicio: '2026-01-10', cadaMeses: 6 };
+
+  it('es la primera fecha del plan posterior a hoy', () => {
+    expect(proximaOcurrencia(fijo, '2026-07-09')).toBe('2026-07-10');
+    expect(proximaOcurrencia(fijo, '2026-07-10')).toBe('2027-01-10');
+    expect(proximaOcurrencia(fijo, '2026-11-25')).toBe('2027-01-10');
+  });
+
+  it('un plan que aún no empieza proyecta su primera fecha', () => {
+    expect(proximaOcurrencia({ tipo: 'FIJO', fechaInicio: '2026-12-01', cadaMeses: 3 }, '2026-11-25')).toBe('2026-12-01');
+  });
+
+  it('ocasional: solo si su fecha es futura', () => {
+    const o = { tipo: 'OCASIONAL', fechaInicio: '2026-12-01', cadaMeses: null };
+    expect(proximaOcurrencia(o, '2026-11-30')).toBe('2026-12-01');
+    expect(proximaOcurrencia(o, '2026-12-01')).toBeNull();
+    expect(proximaOcurrencia(o, '2027-01-01')).toBeNull();
+  });
+});
+
+describe('momentoDeEntrega y orden del listado', () => {
+  const hoy = '2026-11-25';
+
+  it('clasifica por fecha y estado', () => {
+    expect(momentoDeEntrega('PENDIENTE', '2026-11-20', hoy)).toBe('ATRASADA');
+    expect(momentoDeEntrega('PENDIENTE', '2026-11-25', hoy)).toBe('HOY');
+    expect(momentoDeEntrega('PROGRAMADA', '2026-12-25', hoy)).toBe('FUTURA');
+    expect(momentoDeEntrega('ENTREGADA', '2026-11-01', hoy)).toBe('CERRADA');
+    expect(momentoDeEntrega('OMITIDA', '2026-11-25', hoy)).toBe('CERRADA');
+  });
+
+  it('prioriza atrasadas, luego hoy, luego lo que viene y al final lo cerrado', () => {
+    const fila = (momento: 'ATRASADA' | 'HOY' | 'FUTURA' | 'CERRADA', fechaProgramada: string, persona = 'A') => ({ momento, fechaProgramada, persona });
+    const lista = [
+      fila('CERRADA', '2026-11-01'),
+      fila('FUTURA', '2027-01-10'),
+      fila('HOY', '2026-11-25'),
+      fila('ATRASADA', '2026-11-20'),
+      fila('ATRASADA', '2026-11-10'),
+      fila('FUTURA', '2026-12-01'),
+      fila('CERRADA', '2026-11-20'),
+    ].sort(compararEntregas);
+    expect(lista.map((f) => `${f.momento}:${f.fechaProgramada}`)).toEqual([
+      'ATRASADA:2026-11-10',
+      'ATRASADA:2026-11-20',
+      'HOY:2026-11-25',
+      'FUTURA:2026-12-01',
+      'FUTURA:2027-01-10',
+      'CERRADA:2026-11-20',
+      'CERRADA:2026-11-01',
+    ]);
+  });
+
+  it('en la misma fecha ordena por nombre', () => {
+    const a = { momento: 'HOY' as const, fechaProgramada: '2026-11-25', persona: 'BORGES' };
+    const b = { momento: 'HOY' as const, fechaProgramada: '2026-11-25', persona: 'BERMÚDEZ' };
+    expect([a, b].sort(compararEntregas).map((f) => f.persona)).toEqual(['BERMÚDEZ', 'BORGES']);
   });
 });
 

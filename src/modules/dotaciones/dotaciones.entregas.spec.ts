@@ -117,4 +117,47 @@ describe('dotaciones: coordinador y entrega a la agencia (base real)', () => {
     expect(lista.some((c) => c.id === ids.coord)).toBe(true);
     expect(lista.some((c) => c.id === ids.lav1)).toBe(false);
   });
+
+  it('el listado prioriza lo atrasado, luego lo de hoy y al final lo que viene, y se filtra por plan y fecha', async () => {
+    const hoy = fechaEnEcuador(new Date()).dia;
+    const sumar = (n: number) => {
+      const d = new Date(`${hoy}T00:00:00.000Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const futuro = await service.guardarPlan({ ...planBase('PERSONAS'), nombre: `${env.marca}-plan-futuro`, fechaInicio: sumar(10) }, { id: ids.coord });
+    env.rastrear('PlanDotacion', futuro.id);
+    const atrasado = await service.guardarPlan({ ...planBase('PERSONAS'), nombre: `${env.marca}-plan-atrasado` }, { id: ids.coord });
+    env.rastrear('PlanDotacion', atrasado.id);
+    // Una de las entregas de hoy del plan "atrasado" quedó sin hacer hace 3 días.
+    const vieja = await env.prisma.entregaDotacion.findFirstOrThrow({ where: { planId: atrasado.id } });
+    await env.prisma.entregaDotacion.update({ where: { id: vieja.id }, data: { fechaProgramada: new Date(`${sumar(-3)}T00:00:00.000Z`) } });
+
+    const lista = (await service.listarEntregas({ estado: 'POR_ENTREGAR' }, gestor)).filter((e) => e.plan.startsWith(env.marca));
+    const orden = { ATRASADA: 0, HOY: 1, FUTURA: 2, CERRADA: 3 } as const;
+    const momentos = lista.map((e) => orden[e.momento]);
+    expect(momentos).toEqual([...momentos].sort((a, b) => a - b));
+    expect(lista[0]).toMatchObject({ momento: 'ATRASADA', fechaProgramada: sumar(-3), estado: 'PENDIENTE', planId: atrasado.id });
+    expect(lista.some((e) => e.momento === 'HOY' && e.estado === 'PENDIENTE')).toBe(true);
+    const proximas = lista.filter((e) => e.momento === 'FUTURA');
+    expect(proximas).toHaveLength(2); // los dos lavadores del plan futuro
+    expect(proximas.every((e) => e.estado === 'PROGRAMADA' && e.fechaProgramada === sumar(10) && e.id.startsWith('proyectada:'))).toBe(true);
+    expect(proximas[0].items[0].cantidadPlan).toBe(2);
+
+    // Solo lo que viene
+    const soloProgramadas = (await service.listarEntregas({ estado: 'PROGRAMADA' }, gestor)).filter((e) => e.plan.startsWith(env.marca));
+    expect(soloProgramadas.map((e) => e.planId)).toEqual([futuro.id, futuro.id]);
+    // Por plan
+    const delAtrasado = await service.listarEntregas({ planId: atrasado.id, estado: 'POR_ENTREGAR' }, gestor);
+    expect(delAtrasado.every((e) => e.planId === atrasado.id)).toBe(true);
+    expect(delAtrasado).toHaveLength(2);
+    // Por fecha: hasta hoy deja fuera lo que viene; desde mañana deja solo lo que viene
+    const hastaHoy = (await service.listarEntregas({ estado: 'POR_ENTREGAR', hasta: hoy }, gestor)).filter((e) => e.plan.startsWith(env.marca));
+    expect(hastaHoy.some((e) => e.momento === 'FUTURA')).toBe(false);
+    const desdeManana = (await service.listarEntregas({ estado: 'POR_ENTREGAR', desde: sumar(1) }, gestor)).filter((e) => e.plan.startsWith(env.marca));
+    expect(desdeManana.length).toBe(2);
+    expect(desdeManana.every((e) => e.momento === 'FUTURA')).toBe(true);
+    // Un coordinador ajeno no ve las proyectadas de planes que no son suyos
+    expect((await service.listarEntregas({ estado: 'PROGRAMADA' }, otro())).filter((e) => e.plan.startsWith(env.marca))).toHaveLength(0);
+  });
 });

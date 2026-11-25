@@ -9,8 +9,11 @@ import {
   claveDestino,
   MAX_BYTES_EVIDENCIA_DOTACION,
   MAX_EVIDENCIAS_DOTACION,
+  compararEntregas,
+  momentoDeEntrega,
   ocurrenciaVigente,
   personaEnPlan,
+  proximaOcurrencia,
   ROLES_SIN_DOTACION,
 } from './dotaciones.reglas.js';
 import type {
@@ -29,6 +32,13 @@ const nombreDe = (u: { name: string; lastname: string }) => apellidosNombres(u);
 const dia = (d: Date) => d.toISOString().slice(0, 10);
 
 const INCLUIR_PLAN = { items: { include: { producto: { select: { nombre: true } } } } } satisfies Prisma.PlanDotacionInclude;
+
+const INCLUIR_PLAN_PROYECCION = {
+  items: { include: { producto: { select: { nombre: true, stock: true, categoria: { select: { nombre: true } } } } } },
+} satisfies Prisma.PlanDotacionInclude;
+
+/** Tope de entregas proyectadas (las que aún no se generan) en un listado, para no devolver miles de filas. */
+const MAX_PROYECTADAS = 1000;
 
 const INCLUIR_ENTREGA = {
   plan: { select: { id: true, nombre: true, coordinadorId: true, modoEntrega: true } },
@@ -238,24 +248,9 @@ export class DotacionesService {
       fechaEnEcuador(plan.createdAt).dia,
     );
     if (!ocurrencia) return 0;
-    const personas = await this.prisma.user.findMany({
-      where: { estado: 1, role: { namerol: { notIn: ROLES_SIN_DOTACION } } },
-      select: { id: true, agenciaId: true, regionId: true, role: { select: { namerol: true } } },
-    });
-    const elegibles = personas.filter((p) => personaEnPlan(plan, { rol: p.role.namerol, agenciaId: p.agenciaId }));
     const fecha = diaComoFecha(ocurrencia);
     let creadas = 0;
-    // Un destino por persona o, en modo AGENCIA, uno por agencia (con las cantidades del plan por cada persona que la integra).
-    const destinos =
-      plan.modoEntrega === 'AGENCIA'
-        ? [...agruparPorAgencia(elegibles)].map(([agenciaId, grupo]) => ({
-            personaId: null as string | null,
-            clave: claveDestino(grupo[0], agenciaId, 'AGENCIA'),
-            agenciaId: agenciaId as string | null,
-            regionId: grupo[0].regionId,
-            personas: grupo.length,
-          }))
-        : elegibles.map((p) => ({ personaId: p.id as string | null, clave: p.id, agenciaId: p.agenciaId, regionId: p.regionId, personas: 1 }));
+    const destinos = this.destinosDelPlan(plan, await this.personasConDotacion());
     for (const d of destinos) {
       const ya = await this.prisma.entregaDotacion.findUnique({
         where: { planId_claveDestino_fechaProgramada: { planId, claveDestino: d.clave, fechaProgramada: fecha } },
@@ -272,6 +267,41 @@ export class DotacionesService {
       creadas++;
     }
     return creadas;
+  }
+
+  /** Personas activas que pueden recibir dotación (los roles de administración quedan fuera). */
+  private personasConDotacion() {
+    return this.prisma.user.findMany({
+      where: { estado: 1, role: { namerol: { notIn: ROLES_SIN_DOTACION } } },
+      select: { id: true, name: true, lastname: true, agenciaId: true, regionId: true, role: { select: { namerol: true } }, agencia: { select: { nombre: true } } },
+    });
+  }
+
+  /** Un destino por persona o, en modo AGENCIA, uno por agencia (con las cantidades del plan por cada persona que la integra). */
+  private destinosDelPlan(
+    plan: { roles: string[]; agenciasIds: string[]; modoEntrega: string },
+    personas: Awaited<ReturnType<DotacionesService['personasConDotacion']>>,
+  ) {
+    const elegibles = personas.filter((p) => personaEnPlan(plan, { rol: p.role.namerol, agenciaId: p.agenciaId }));
+    return plan.modoEntrega === 'AGENCIA'
+      ? [...agruparPorAgencia(elegibles)].map(([agenciaId, grupo]) => ({
+          personaId: null as string | null,
+          clave: claveDestino(grupo[0], agenciaId, 'AGENCIA'),
+          agenciaId: agenciaId as string | null,
+          regionId: grupo[0].regionId,
+          personas: grupo.length,
+          persona: null as (typeof elegibles)[number] | null,
+          agenciaNombre: grupo[0].agencia?.nombre ?? null,
+        }))
+      : elegibles.map((p) => ({
+          personaId: p.id as string | null,
+          clave: p.id,
+          agenciaId: p.agenciaId,
+          regionId: p.regionId,
+          personas: 1,
+          persona: p as (typeof elegibles)[number] | null,
+          agenciaNombre: p.agencia?.nombre ?? null,
+        }));
   }
 
   /** Cron diario: revisa todos los planes activos. */
@@ -330,16 +360,101 @@ export class DotacionesService {
     return lista.map((e) => this.presentarEntrega(e, agencias, coordinadores));
   }
 
+  /**
+   * Listado priorizado: primero lo atrasado que sigue sin entregarse, luego lo de hoy, después lo que viene (se proyecta del calendario del
+   * plan, aunque todavía no se haya generado) y al final lo ya entregado u omitido. Se puede filtrar por plan, persona y rango de fechas.
+   */
   async listarEntregas(dto: ListarEntregasDto, user: any) {
+    const hoy = fechaEnEcuador(new Date()).dia;
+    const estado = dto.estado;
+    const quierePendientes = !estado || estado === 'PENDIENTE' || estado === 'POR_ENTREGAR';
+    const quiereCerradas = !estado || estado === 'ENTREGADA' || estado === 'OMITIDA';
+    const quiereProgramadas = !estado || estado === 'PROGRAMADA' || estado === 'POR_ENTREGAR';
     const buscar = dto.buscar?.trim();
-    const where: Prisma.EntregaDotacionWhereInput = {
+    const base: Prisma.EntregaDotacionWhereInput = {
       ...(this.veTodas(user) ? {} : { plan: { coordinadorId: String(user.id) } }),
-      ...(dto.estado ? { estado: dto.estado } : {}),
       ...(dto.planId ? { planId: dto.planId } : {}),
+      ...(dto.desde || dto.hasta
+        ? { fechaProgramada: { ...(dto.desde ? { gte: diaComoFecha(dto.desde) } : {}), ...(dto.hasta ? { lte: diaComoFecha(dto.hasta) } : {}) } }
+        : {}),
       ...(buscar ? { persona: { OR: [{ name: { contains: buscar, mode: 'insensitive' } }, { lastname: { contains: buscar, mode: 'insensitive' } }] } } : {}),
     };
-    const lista = await this.prisma.entregaDotacion.findMany({ where, include: INCLUIR_ENTREGA, orderBy: [{ fechaProgramada: 'asc' }, { createdAt: 'asc' }], take: 500 });
-    return this.presentarEntregas(lista);
+
+    const [pendientes, cerradas, programadas] = await Promise.all([
+      quierePendientes
+        ? this.prisma.entregaDotacion.findMany({ where: { ...base, estado: 'PENDIENTE' }, include: INCLUIR_ENTREGA, orderBy: [{ fechaProgramada: 'asc' }, { createdAt: 'asc' }], take: 1000 })
+        : [],
+      quiereCerradas
+        ? this.prisma.entregaDotacion.findMany({
+            where: { ...base, estado: estado === 'ENTREGADA' || estado === 'OMITIDA' ? estado : { in: ['ENTREGADA', 'OMITIDA'] } },
+            include: INCLUIR_ENTREGA,
+            orderBy: [{ fechaProgramada: 'desc' }, { createdAt: 'desc' }],
+            take: 500,
+          })
+        : [],
+      quiereProgramadas ? this.proyectarEntregas(dto, user, hoy) : [],
+    ]);
+
+    const reales = await this.presentarEntregas([...pendientes, ...cerradas]);
+    return [...reales, ...programadas]
+      .map((e) => ({ ...e, momento: momentoDeEntrega(e.estado, e.fechaProgramada, hoy) }))
+      .sort(compararEntregas);
+  }
+
+  /**
+   * Entregas que vienen: la próxima fecha de cada plan activo, por persona (o por agencia). Aún no existen en la base (se generan el día que
+   * toca), así que se muestran como PROGRAMADA y no se pueden registrar hasta entonces.
+   */
+  private async proyectarEntregas(dto: ListarEntregasDto, user: any, hoy: string) {
+    const planes = await this.prisma.planDotacion.findMany({
+      where: {
+        activo: true,
+        ...(this.veTodas(user) ? {} : { coordinadorId: String(user.id) }),
+        ...(dto.planId ? { id: dto.planId } : {}),
+      },
+      include: INCLUIR_PLAN_PROYECCION,
+    });
+    const conFecha = planes
+      .map((p) => ({ plan: p, fecha: proximaOcurrencia({ tipo: p.tipo, fechaInicio: dia(p.fechaInicio), cadaMeses: p.cadaMeses }, hoy) }))
+      .filter((x): x is { plan: (typeof planes)[number]; fecha: string } => !!x.fecha && x.plan.items.length > 0)
+      .filter((x) => (!dto.desde || x.fecha >= dto.desde) && (!dto.hasta || x.fecha <= dto.hasta));
+    if (!conFecha.length) return [];
+
+    const personas = await this.personasConDotacion();
+    const coordinadores = await this.nombresDeCoordinadores(conFecha.map((x) => x.plan.coordinadorId));
+    const buscar = dto.buscar?.trim().toLowerCase();
+    const filas: Array<ReturnType<DotacionesService['presentarEntrega']> & { estado: 'PROGRAMADA' }> = [];
+    for (const { plan, fecha } of conFecha) {
+      for (const d of this.destinosDelPlan(plan, personas)) {
+        // Igual que en las generadas, buscar por persona deja fuera las entregas a agencia completa.
+        if (buscar && !(d.persona && `${d.persona.name} ${d.persona.lastname}`.toLowerCase().includes(buscar))) continue;
+        filas.push({
+          id: `proyectada:${plan.id}:${d.clave}:${fecha}`,
+          planId: plan.id,
+          plan: plan.nombre,
+          modo: d.persona ? 'PERSONAS' : 'AGENCIA',
+          coordinador: plan.coordinadorId ? (coordinadores.get(plan.coordinadorId) ?? null) : null,
+          personaId: d.personaId,
+          persona: d.persona ? nombreDe(d.persona) : `Agencia ${d.agenciaNombre ?? '—'}`,
+          personasCubiertas: d.persona ? null : d.personas,
+          rol: d.persona ? d.persona.role.namerol : 'AGENCIA',
+          agencia: d.agenciaNombre,
+          recibeNombre: null,
+          firmada: false,
+          fechaProgramada: fecha,
+          estado: 'PROGRAMADA',
+          entregadaEn: null,
+          nota: null,
+          items: plan.items.map((i) => ({
+            id: i.id, productoId: i.productoId, producto: i.producto.nombre, categoria: i.producto.categoria.nombre,
+            stock: i.producto.stock, cantidadPlan: i.cantidad * d.personas, cantidadEntregada: null,
+          })),
+          evidencias: [],
+        });
+        if (filas.length >= MAX_PROYECTADAS) return filas;
+      }
+    }
+    return filas;
   }
 
   /** La firma de quien recibió (imagen pesada: no viaja en el listado). */

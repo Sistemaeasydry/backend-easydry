@@ -70,9 +70,16 @@ export class EstadoPlanDto {
 }
 
 export class ListarEntregasDto {
-  @IsOptional() @IsIn(['PENDIENTE', 'ENTREGADA', 'OMITIDA']) estado?: 'PENDIENTE' | 'ENTREGADA' | 'OMITIDA';
+  /**
+   * PENDIENTE = atrasadas y de hoy · PROGRAMADA = las que vienen (aún no generadas) · POR_ENTREGAR = pendientes + programadas ·
+   * ENTREGADA / OMITIDA = cerradas. Sin estado: todas.
+   */
+  @IsOptional() @IsIn(['PENDIENTE', 'ENTREGADA', 'OMITIDA', 'PROGRAMADA', 'POR_ENTREGAR']) estado?: 'PENDIENTE' | 'ENTREGADA' | 'OMITIDA' | 'PROGRAMADA' | 'POR_ENTREGAR';
   @IsOptional() @IsUUID() planId?: string;
   @IsOptional() @IsString() @MaxLength(100) buscar?: string;
+  /** Rango de fecha programada, `AAAA-MM-DD` (ambos extremos incluidos). */
+  @IsOptional() @Matches(DIA) desde?: string;
+  @IsOptional() @Matches(DIA) hasta?: string;
 }
 
 export class ItemEntregadoDto {

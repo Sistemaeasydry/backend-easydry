@@ -42,6 +42,40 @@ export function ocurrenciaVigente(plan: CalendarioPlan, hoy: string, desde: stri
   return ultima && ultima >= desde ? ultima : null;
 }
 
+/** Primera fecha del plan posterior a `hoy` (las entregas aún no se generan: se proyectan para mostrarlas por adelantado). */
+export function proximaOcurrencia(plan: CalendarioPlan, hoy: string): string | null {
+  if (plan.tipo === 'OCASIONAL' || !plan.cadaMeses || plan.cadaMeses < 1) return plan.fechaInicio > hoy ? plan.fechaInicio : null;
+  for (let k = 0; k < 1200; k++) {
+    const f = sumarMeses(plan.fechaInicio, k * plan.cadaMeses);
+    if (f > hoy) return f;
+  }
+  return null;
+}
+
+/** Dónde cae una entrega respecto a hoy: lo que ya debió hacerse, lo de hoy, lo que viene o lo ya cerrado. */
+export type MomentoEntrega = 'ATRASADA' | 'HOY' | 'FUTURA' | 'CERRADA';
+
+export function momentoDeEntrega(estado: string, fecha: string, hoy: string): MomentoEntrega {
+  if (estado === 'PROGRAMADA') return 'FUTURA';
+  if (estado !== 'PENDIENTE') return 'CERRADA';
+  return fecha < hoy ? 'ATRASADA' : fecha === hoy ? 'HOY' : 'FUTURA';
+}
+
+const ORDEN_MOMENTO: Record<MomentoEntrega, number> = { ATRASADA: 0, HOY: 1, FUTURA: 2, CERRADA: 3 };
+
+/** Orden del listado: primero lo atrasado (la más vieja arriba), luego lo de hoy, después lo que viene y al final lo ya cerrado (lo más reciente primero). */
+export function compararEntregas(
+  a: { momento: MomentoEntrega; fechaProgramada: string; persona: string },
+  b: { momento: MomentoEntrega; fechaProgramada: string; persona: string },
+): number {
+  if (a.momento !== b.momento) return ORDEN_MOMENTO[a.momento] - ORDEN_MOMENTO[b.momento];
+  if (a.fechaProgramada !== b.fechaProgramada) {
+    const asc = a.fechaProgramada < b.fechaProgramada ? -1 : 1;
+    return a.momento === 'CERRADA' ? -asc : asc;
+  }
+  return a.persona.localeCompare(b.persona, 'es');
+}
+
 export const MODOS_ENTREGA = ['PERSONAS', 'AGENCIA'] as const;
 export type ModoEntrega = (typeof MODOS_ENTREGA)[number];
 export const MAX_BYTES_FIRMA_DOTACION = 400_000;
