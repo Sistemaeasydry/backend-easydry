@@ -26,6 +26,7 @@ describe('auxiliar del líder (base real)', () => {
     rolNombre: 'AUXILIAR',
     agenciaId: agencia.id,
     bahiaId: bahia1.id,
+    nivel: 'JUNIOR',
     ...extra,
   });
   const actor = () => ({ id: admin.id, role: { namerol: 'SUPER_ADMIN', ambito: 'GLOBAL' }, roleDetails: { namerol: 'SUPER_ADMIN' } });
@@ -77,10 +78,10 @@ describe('auxiliar del líder (base real)', () => {
     const lav = await env.usuario('lav-aux', 'LAVADOR', { agenciaId: otra.id });
     const rol = await env.prisma.role.findUniqueOrThrow({ where: { namerol: 'AUXILIAR' } });
     // Otra agencia: no tiene auxiliar y su bahía es la ajena.
-    await expect(service.updateUsuario({ id: lav.id, roleId: rol.id } as any, actor())).rejects.toThrow(/bahía asignada/);
-    await service.updateUsuario({ id: lav.id, roleId: rol.id, bahiaId: bahiaAjena.id } as any, actor());
+    await expect(service.updateUsuario({ id: lav.id, roleId: rol.id, nivel: 'JUNIOR' } as any, actor())).rejects.toThrow(/bahía asignada/);
+    await service.updateUsuario({ id: lav.id, roleId: rol.id, bahiaId: bahiaAjena.id, nivel: 'JUNIOR' } as any, actor());
     expect(await bahiaActiva(lav.id)).toBe(bahiaAjena.id);
-    await service.updateUsuario({ id: lav.id, name: 'Rosa Maria' } as any, actor());
+    await service.updateUsuario({ id: lav.id, name: 'Rosa Maria', nivel: 'SENIOR' } as any, actor());
     expect(await bahiaActiva(lav.id)).toBe(bahiaAjena.id);
     expect(await env.prisma.bahiaOperador.count({ where: { operadorId: lav.id, activo: true } })).toBe(1);
   });

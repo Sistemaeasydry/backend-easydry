@@ -175,7 +175,7 @@ export class HorariosService {
     const alcance = resolverAlcance(user);
     const personas = await this.prisma.user.findMany({
       where: { ...(whereUsuariosEnAlcance(alcance) as object), estado: 1, role: { capacidades: { has: 'rrhh.timbrar' } } },
-      select: { id: true, name: true, lastname: true, createdAt: true, role: { select: { namerol: true, capacidades: true } } },
+      select: { id: true, name: true, lastname: true, nivel: true, createdAt: true, role: { select: { namerol: true, capacidades: true, categoria: true } } },
       orderBy: [{ name: 'asc' }, { lastname: 'asc' }],
     });
     const h = this.hoy();
@@ -195,6 +195,8 @@ export class HorariosService {
           id: p.id,
           nombre: apellidosNombres(p),
           rol: p.role?.namerol ?? '',
+          departamento: p.role?.categoria ?? null,
+          nivel: p.nivel ?? null,
           obligatoria: p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') ?? false,
           semana: semanaDe(vigente, h.dia),
           porDefecto: !vigente,

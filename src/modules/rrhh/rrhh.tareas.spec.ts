@@ -92,9 +92,10 @@ describe('TareasService (base real)', () => {
       await expect(crear('lider', 'lider')).rejects.toThrow('No puedes asignarte una tarea a ti mismo.');
     });
 
-    it('no se asigna a alguien inactivo ni a un administrador', async () => {
+    it('no se asigna a alguien inactivo; a un administrador sí', async () => {
       await expect(crear('supervisor', 'lavadorInactivo')).rejects.toThrow(/inactiva/);
-      await expect(crear('superAdmin', 'admin')).rejects.toThrow('Esa persona no recibe tareas de RRHH.');
+      expect((await crear('superAdmin', 'admin')).estado).toBe('PENDIENTE');
+      expect((await crear('supervisor', 'superAdmin')).estado).toBe('PENDIENTE'); // hacia arriba
     });
 
     it('cada quien asigna solo dentro de su alcance', async () => {
@@ -110,7 +111,7 @@ describe('TareasService (base real)', () => {
       await expect(crear('lider', 'lavador', { adjuntos: [adjunto('lavador')] })).rejects.toThrow();
     });
 
-    it('asignables: personas activas de mi alcance que reciben tareas, sin mí ni administradores', async () => {
+    it('asignables: personas activas de mi alcance que reciben tareas (incluidos los administradores), sin mí', async () => {
       const delLider = (await service.asignables(actores.lider)).map((p) => p.id);
       expect(delLider).toEqual(expect.arrayContaining([ids.lavador, ids.lavador2]));
       expect(delLider).not.toContain(ids.lider);
@@ -119,10 +120,11 @@ describe('TareasService (base real)', () => {
       const delSupervisor = (await service.asignables(actores.supervisor)).map((p) => p.id);
       expect(delSupervisor).toEqual(expect.arrayContaining([ids.lavador, ids.lavadorVecino, ids.lider]));
       expect(delSupervisor).not.toContain(ids.lavadorLejano);
+      expect(delSupervisor).toEqual(expect.arrayContaining([ids.admin, ids.superAdmin]));
       const delAdmin = (await service.asignables(actores.admin)).map((p) => p.id);
       expect(delAdmin).toContain(ids.lavadorLejano);
       expect(delAdmin).not.toContain(ids.admin);
-      expect(delAdmin).not.toContain(ids.superAdmin);
+      expect(delAdmin).toContain(ids.superAdmin);
     });
   });
 
@@ -314,10 +316,10 @@ describe('TareasService (base real)', () => {
 
   describe('tareas que nacen de un informe', () => {
     it('se crean desde la novedad, una sola vez, con su origen', async () => {
-      const novedadId = `00000000-0000-4000-8000-${String(Date.now()).slice(-12).padStart(12, '0')}`;
-      const datos = { informeId: '11111111-1111-4111-8111-111111111111', novedadId, titulo: 'Piso mojado', descripcion: 'Cerca de la bahía 2', asignadoAId: ids.lavador };
-      const primera = await service.crearDesdeNovedad(datos, actores.lider);
-      const repetida = await service.crearDesdeNovedad(datos, actores.lider);
+      const planId = `00000000-0000-4000-8000-${String(Date.now()).slice(-12).padStart(12, '0')}`;
+      const datos = { informeId: '11111111-1111-4111-8111-111111111111', planId, titulo: 'Piso mojado', descripcion: 'Cerca de la bahía 2', asignadoAId: ids.lavador };
+      const primera = await service.crearDesdePlan(datos, actores.lider);
+      const repetida = await service.crearDesdePlan(datos, actores.lider);
       expect(repetida.id).toBe(primera.id);
       const t = await service.detalle(primera.id, actores.lider);
       expect(t).toMatchObject({ titulo: 'Piso mojado', descripcion: 'Cerca de la bahía 2', estado: 'PENDIENTE', asignadoPor: { id: ids.lider } });
@@ -326,15 +328,15 @@ describe('TareasService (base real)', () => {
     });
 
     it('sin descripción se usa el título, y el responsable debe estar en el alcance de quien guarda el informe', async () => {
-      const t = await service.crearDesdeNovedad({ informeId: '11111111-1111-4111-8111-111111111111', novedadId: '22222222-2222-4222-8222-222222222222', titulo: 'Solo título', descripcion: '', asignadoAId: ids.lavador }, actores.lider);
+      const t = await service.crearDesdePlan({ informeId: '11111111-1111-4111-8111-111111111111', planId: '22222222-2222-4222-8222-222222222222', titulo: 'Solo título', descripcion: '', asignadoAId: ids.lavador }, actores.lider);
       expect((await service.detalle(t.id, actores.lider)).descripcion).toBe('Solo título');
       await expect(
-        service.crearDesdeNovedad({ informeId: '11111111-1111-4111-8111-111111111111', novedadId: '33333333-3333-4333-8333-333333333333', titulo: 'x', descripcion: 'y', asignadoAId: ids.lavadorLejano }, actores.lider),
+        service.crearDesdePlan({ informeId: '11111111-1111-4111-8111-111111111111', planId: '33333333-3333-4333-8333-333333333333', titulo: 'x', descripcion: 'y', asignadoAId: ids.lavadorLejano }, actores.lider),
       ).rejects.toThrow('fuera de tu alcance');
     });
 
     it('avisa al responsable de cada tarea con el número del informe', async () => {
-      const t = await service.crearDesdeNovedad({ informeId: '11111111-1111-4111-8111-111111111111', novedadId: '44444444-4444-4444-8444-444444444444', titulo: 'Aviso', descripcion: 'd', asignadoAId: ids.lavador2 }, actores.lider);
+      const t = await service.crearDesdePlan({ informeId: '11111111-1111-4111-8111-111111111111', planId: '44444444-4444-4444-8444-444444444444', titulo: 'Aviso', descripcion: 'd', asignadoAId: ids.lavador2 }, actores.lider);
       await service.avisarTareasDeInforme([t.id], { id: '11111111-1111-4111-8111-111111111111', numero: 'INF-2031-0001' }, actores.lider);
       const aviso = await env.esperar(async () => (await avisos('TAREA_ASIGNADA', t.id))[0]);
       expect(aviso.mensaje).toContain('INF-2031-0001');

@@ -77,7 +77,7 @@ export class InformesInspeccionService {
     @Optional() private readonly cache?: CacheService,
     /** Avisa a los usuarios adjuntos cuando el informe se aprueba. */
     @Optional() private readonly notifications?: NotificationsService,
-    /** Crea las tareas de RRHH de las novedades que tienen responsable, al guardar el informe. */
+    /** Crea las tareas de RRHH de los planes de acción que tienen responsable, al guardar el informe. */
     @Optional() private readonly tareas?: TareasService,
   ) {}
 
@@ -438,6 +438,7 @@ export class InformesInspeccionService {
       estadoEfectivo: estadoPlanEfectivo(p, hoy),
       observaciones: p.observaciones,
       evidenciaCumplimiento: p.evidenciaCumplimiento ?? [],
+      responsableId: p.responsableId ?? null,
       completadoEn: p.completadoEn?.toISOString() ?? null,
     };
   }
@@ -510,7 +511,6 @@ export class InformesInspeccionService {
         categoria: n.categoria,
         area: n.area,
         fotos: n.fotos ?? [],
-        responsableId: n.responsableId ?? null,
         registradaEn: n.registradaEn.toISOString(),
       })),
       actividades: i.actividades.map((a: any) => ({
@@ -673,7 +673,7 @@ export class InformesInspeccionService {
   }
 
   private async sincronizarNovedades(tx: Tx, informeId: string, items: NovedadDto[]) {
-    const existentes = new Map((await tx.informeNovedad.findMany({ where: { informeId }, select: { id: true, titulo: true, descripcion: true, categoria: true, area: true, fotos: true, orden: true, responsableId: true } })).map((x) => [x.id, x]));
+    const existentes = new Map((await tx.informeNovedad.findMany({ where: { informeId }, select: { id: true, titulo: true, descripcion: true, categoria: true, area: true, fotos: true, orden: true } })).map((x) => [x.id, x]));
     const conservar = items.filter((i) => i.id && existentes.has(i.id)).map((i) => i.id as string);
     if (conservar.length !== existentes.size) await tx.informeNovedad.deleteMany({ where: { informeId, id: { notIn: conservar } } });
     const nuevas: Prisma.InformeNovedadUncheckedCreateInput[] = [];
@@ -685,7 +685,6 @@ export class InformesInspeccionService {
         area: texto(n.area),
         fotos: lista(n.fotos),
         orden,
-        responsableId: n.responsableId ?? null,
       };
       const previa = n.id ? existentes.get(n.id) : undefined;
       // Solo se escribe lo que cambió (guardar sin cambios no toca la base) y lo nuevo entra en una sola consulta.
@@ -717,7 +716,7 @@ export class InformesInspeccionService {
   }
 
   private async sincronizarPlanes(tx: Tx, informeId: string, agenciaId: string, items: PlanAccionDto[]) {
-    const existentes = new Map((await tx.informePlanAccion.findMany({ where: { informeId }, select: { id: true, agenciaId: true, problema: true, accionRequerida: true, evidenciaCumplimiento: true, orden: true } })).map((x) => [x.id, x]));
+    const existentes = new Map((await tx.informePlanAccion.findMany({ where: { informeId }, select: { id: true, agenciaId: true, problema: true, accionRequerida: true, evidenciaCumplimiento: true, orden: true, responsableId: true } })).map((x) => [x.id, x]));
     const conservar = items.filter((i) => i.id && existentes.has(i.id)).map((i) => i.id as string);
     if (conservar.length !== existentes.size) await tx.informePlanAccion.deleteMany({ where: { informeId, id: { notIn: conservar } } });
     // El responsable de un plan es siempre la agencia del informe y su fecha es la del día en que se crea.
@@ -733,6 +732,7 @@ export class InformesInspeccionService {
         accionRequerida: texto(p.accionRequerida),
         evidenciaCumplimiento: lista(p.evidenciaCumplimiento),
         orden,
+        responsableId: p.responsableId ?? null,
       };
       const previo = p.id ? existentes.get(p.id) : undefined;
       if (previo) {
@@ -761,16 +761,16 @@ export class InformesInspeccionService {
       firmadas: (informe.firmas ?? []).filter((f: any) => f.imagen && f.vigente !== false).map((f: any) => f.tipo),
     });
     if (faltan.length) throw new BadRequestException(`Antes de guardar el informe completa: ${faltan.join(', ')}.`);
-    // Las novedades con responsable se vuelven tareas de RRHH en la misma transacción que guarda el informe. Si algún responsable
+    // Los planes de acción con responsable se vuelven tareas de RRHH en la misma transacción que guarda el informe. Si algún responsable
     // no es válido (inactivo, fuera de tu alcance) el informe no se guarda y se avisa antes de tocar nada.
-    const conResponsable = (informe.novedades ?? []).filter((n: any) => n.responsableId);
-    for (const responsableId of new Set(conResponsable.map((n: any) => n.responsableId as string))) {
+    const conResponsable = (informe.planes ?? []).filter((p: any) => p.responsableId);
+    for (const responsableId of new Set(conResponsable.map((p: any) => p.responsableId as string))) {
       await this.tareas?.validarResponsable(user, responsableId);
     }
     const creadas: string[] = [];
     await this.cambiarEstado(informe, 'GUARDADO', user, 'GUARDADO', 'Informe firmado y guardado de forma definitiva.', { guardadoEn: new Date() }, async (tx) => {
-      for (const n of conResponsable) {
-        const t = await this.tareas?.crearDesdeNovedad({ informeId: informe.id, novedadId: n.id, titulo: n.titulo, descripcion: n.descripcion, asignadoAId: n.responsableId as string }, user, tx);
+      for (const p of conResponsable) {
+        const t = await this.tareas?.crearDesdePlan({ informeId: informe.id, planId: p.id, titulo: p.problema, descripcion: p.accionRequerida, asignadoAId: p.responsableId as string }, user, tx);
         if (t?.id) creadas.push(t.id);
       }
     });

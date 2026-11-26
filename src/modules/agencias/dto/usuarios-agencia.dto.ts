@@ -51,6 +51,16 @@ export class AsignarUsuarioAgenciaDto {
  *  - PAGINADO: con `page` o `pageSize` → formato estándar {items, total, page, ...} con orden, búsqueda y filtros en servidor.
  */
 export class ListUsuariosAgenciaDto extends DataGridQueryDto {
+  @ApiPropertyOptional({ enum: ['JUNIOR', 'SENIOR'] })
+  @IsOptional()
+  @IsIn(['JUNIOR', 'SENIOR'])
+  nivel?: string;
+
+  @ApiPropertyOptional({ enum: ['OPERADOR', 'ADMINISTRACION'], description: 'Departamento: la categoría del rol. Solo modo paginado.' })
+  @IsOptional()
+  @IsIn(['OPERADOR', 'ADMINISTRACION'])
+  departamento?: string;
+
   // Sin valores por defecto: así se distingue a un cliente antiguo (no envía página ni tamaño) de uno nuevo.
   @ApiPropertyOptional({ example: 1, description: 'Página (1 = primera). Activa el modo paginado.' })
   @IsOptional()
@@ -207,6 +217,11 @@ export class UpdateDatosPersonaDto {
 }
 
 export class UpdateUsuarioDto {
+  @ApiPropertyOptional({ enum: ['JUNIOR', 'SENIOR'], description: 'Junior o Senior (obligatorio en roles operativos)' })
+  @IsOptional()
+  @IsIn(['', 'JUNIOR', 'SENIOR'])
+  nivel?: string;
+
   @ApiProperty({ example: 'uuid-usuario', description: 'ID del usuario a actualizar' })
   @IsString()
   @IsNotEmpty({ message: 'El ID de usuario es obligatorio' })
@@ -317,6 +332,11 @@ export class UpdateUsuarioDto {
 }
 
 export class CreateUsuarioDto {
+  @ApiPropertyOptional({ enum: ['JUNIOR', 'SENIOR'], description: 'Junior o Senior (obligatorio en roles operativos)' })
+  @IsOptional()
+  @IsIn(['', 'JUNIOR', 'SENIOR'])
+  nivel?: string;
+
   @ApiProperty({ example: 'Carlos' })
   @IsString()
   @IsNotEmpty({ message: 'El nombre es obligatorio' })
@@ -417,6 +437,16 @@ export class CreateUsuarioDto {
 
 /** Sin page/pageSize: arreglo (hasta 100). Con alguno: página. Orden: nombre, agencia, rol, estado, fecha. */
 export class ListOperadoresDto extends PaginacionOpcionalDto {
+  @ApiPropertyOptional({ enum: ['OPERADOR', 'ADMINISTRACION'], description: 'Departamento: la categoría del rol' })
+  @IsOptional()
+  @IsIn(['OPERADOR', 'ADMINISTRACION'])
+  departamento?: string;
+
+  @ApiPropertyOptional({ enum: ['JUNIOR', 'SENIOR'] })
+  @IsOptional()
+  @IsIn(['JUNIOR', 'SENIOR'])
+  nivel?: string;
+
   @ApiPropertyOptional({ example: 'uuid-agencia', description: 'ID o nombre de la agencia' })
   @IsOptional()
   @IsString()
@@ -454,10 +484,22 @@ export class ListOperadoresDto extends PaginacionOpcionalDto {
 }
 
 export class CreateOperadorDto {
-  @ApiProperty({ example: 'Pedro Ramírez' })
+  @ApiPropertyOptional({ enum: ['JUNIOR', 'SENIOR'], description: 'Junior o Senior (obligatorio en roles operativos)' })
+  @IsOptional()
+  @IsIn(['', 'JUNIOR', 'SENIOR'])
+  nivel?: string;
+
+  @ApiProperty({ example: 'Ramírez Loor' })
   @IsString()
-  @IsNotEmpty({ message: 'El nombre completo es obligatorio' })
-  nombre: string;
+  @IsNotEmpty({ message: 'Los apellidos son obligatorios' })
+  @MaxLength(80)
+  apellidos: string;
+
+  @ApiProperty({ example: 'Pedro José' })
+  @IsString()
+  @IsNotEmpty({ message: 'Los nombres son obligatorios' })
+  @MaxLength(80)
+  nombres: string;
 
   @ApiProperty({ example: 'Lavado#2026Seco', description: 'Contraseña inicial (mín. 8 caracteres)' })
   @IsString()
@@ -501,6 +543,11 @@ export class CreateOperadorDto {
 }
 
 export class UpdateOperadorDto {
+  @ApiPropertyOptional({ enum: ['JUNIOR', 'SENIOR'], description: 'Junior o Senior (obligatorio en roles operativos)' })
+  @IsOptional()
+  @IsIn(['', 'JUNIOR', 'SENIOR'])
+  nivel?: string;
+
   @ApiProperty({ example: 'uuid-operador' })
   @IsString()
   @IsNotEmpty({ message: 'El ID del operador es obligatorio' })
@@ -512,10 +559,17 @@ export class UpdateOperadorDto {
   @MaxLength(300)
   motivo?: string;
 
-  @ApiPropertyOptional({ example: 'Pedro Ramírez' })
+  @ApiPropertyOptional({ example: 'Ramírez Loor' })
   @IsOptional()
   @IsString()
-  nombre?: string;
+  @MaxLength(80)
+  apellidos?: string;
+
+  @ApiPropertyOptional({ example: 'Pedro José' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  nombres?: string;
 
   @ApiPropertyOptional({ example: '1723456789' })
   @IsOptional()

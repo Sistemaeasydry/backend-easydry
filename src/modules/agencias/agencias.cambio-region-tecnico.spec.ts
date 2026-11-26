@@ -70,7 +70,7 @@ describe('cambio de región de un técnico con trabajo abierto (base real)', () 
     const tecnico = await env.usuario('tec-nombre', 'TECNICO', { regionId: costa.id });
     for (let i = 0; i < 5; i++) await mantenimiento(tecnico.id, 'PENDIENTE'); // aunque tenga trabajo abierto...
     // ...no importa: no se está tocando la región.
-    await expect(service.updateUsuario({ id: tecnico.id, name: 'Nuevo Nombre' } as any)).resolves.toBeDefined();
+    await expect(service.updateUsuario({ id: tecnico.id, name: 'Nuevo Nombre', nivel: 'SENIOR' } as any)).resolves.toBeDefined();
     const enBase = await env.prisma.user.findUniqueOrThrow({ where: { id: tecnico.id } });
     expect(enBase.name).toBe('Nuevo Nombre');
     expect(enBase.regionId).toBe(costa.id);

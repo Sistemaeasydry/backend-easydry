@@ -404,7 +404,7 @@ export const ROLES_BASE: RolBase[] = [
   {
     namerol: 'TALENTO_HUMANO',
     descripcion:
-      'Talento Humano: gestiona todo RRHH a nivel nacional (timbradas, horarios, tareas, ubicaciones y dotaciones). Ve usuarios y lavadores sin editarlos.',
+      'Talento Humano: gestiona todo RRHH a nivel nacional (timbradas, horarios, tareas, ubicaciones y dotaciones). Registra y edita usuarios (no roles) y al personal operativo.',
     ambito: 'GLOBAL',
     capacidades: p(
       'agencias.consultar',
@@ -413,6 +413,9 @@ export const ROLES_BASE: RolBase[] = [
       'catalogo.ver',
       'dashboard.ver',
       'operadores.ver',
+      'operadores.gestionar',
+      'bahias.asignar',
+      'usuarios.gestionar',
       'dotaciones.ver',
       'dotaciones.gestionar',
       'dotaciones.entregar',
@@ -458,7 +461,7 @@ for (const rol of ROLES_BASE) {
 }
 // RRHH: todos los roles menos ADMIN y SUPER_ADMIN timbran y reciben tareas. Asignan tareas y ven las timbradas del equipo (dentro de su
 // ámbito) los administradores, el supervisor, los coordinadores y el líder. Solo ADMIN y SUPER_ADMIN configuran las ubicaciones.
-// ADMIN y SUPER_ADMIN no timbran ni reciben tareas. El APROBADOR puede timbrar, pero no está obligado: no tiene `rrhh.timbrada.obligatoria`.
+// ADMIN y SUPER_ADMIN no timbran, pero sí reciben tareas. El APROBADOR puede timbrar, pero no está obligado: no tiene `rrhh.timbrada.obligatoria`.
 const ROLES_NO_TIMBRAN = ['SUPER_ADMIN', 'ADMIN'];
 const ROLES_TIMBRADA_VOLUNTARIA = ['APROBADOR'];
 // El BACKUP reemplaza al líder y el AUXILIAR copia sus permisos (lavador con las capacidades del líder): heredan los suyos.
@@ -467,14 +470,14 @@ const ROLES_ASIGNAN_TAREAS = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMER
 const ROLES_VEN_TIMBRADAS_EQUIPO = [...ROLES_ASIGNAN_TAREAS, 'LIDER', 'BACKUP'];
 const ROLES_CONFIGURAN_UBICACION = ['SUPER_ADMIN', 'ADMIN', 'TALENTO_HUMANO'];
 const ROLES_EDITAN_HORARIOS = ['SUPER_ADMIN', 'ADMIN', 'TALENTO_HUMANO'];
-const CAPACIDADES_RRHH_PROPIAS: CodigoPermiso[] = p('rrhh.timbrar', 'rrhh.tareas.propias');
 for (const rol of ROLES_BASE) {
   const quitar: CodigoPermiso[] = [
-    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.timbrar', 'rrhh.tareas.propias', 'rrhh.timbrada.obligatoria') : []),
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? p('rrhh.timbrar', 'rrhh.timbrada.obligatoria') : []),
     ...(ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? p('rrhh.timbrada.obligatoria') : []),
   ];
   const extra: CodigoPermiso[] = [
-    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? [] : CAPACIDADES_RRHH_PROPIAS),
+    'rrhh.tareas.propias',
+    ...(ROLES_NO_TIMBRAN.includes(rol.namerol) ? [] : p('rrhh.timbrar')),
     ...(ROLES_NO_TIMBRAN.includes(rol.namerol) || ROLES_TIMBRADA_VOLUNTARIA.includes(rol.namerol) ? [] : p('rrhh.timbrada.obligatoria')),
     ...(ROLES_ASIGNAN_TAREAS.includes(rol.namerol) ? p('rrhh.tareas.asignar', 'rrhh.tareas.crear', 'rrhh.tareas.revisar', 'rrhh.tareas.cancelar', 'rrhh.tareas.reasignar') : []),
     ...(ROLES_VEN_TIMBRADAS_EQUIPO.includes(rol.namerol) ? p('rrhh.timbradas.ver') : []),
@@ -485,6 +488,11 @@ for (const rol of ROLES_BASE) {
 }
 // Y cada rol oficial trae también sus páginas, sub-páginas y acciones equivalentes (sin perder ningún permiso clásico).
 for (const rol of ROLES_BASE) rol.capacidades = capacidadesConPaginas(rol.capacidades, rol.namerol) as CodigoPermiso[];
+// Talento Humano gestiona usuarios (sin contraseñas ni roles) y ve en Gestión de Lavadores a todo el personal operativo.
+for (const rol of ROLES_BASE) {
+  if (rol.namerol !== 'TALENTO_HUMANO') continue;
+  rol.capacidades = [...new Set([...rol.capacidades, 'operadores.personal_operativo'])] as CodigoPermiso[];
+}
 // El aprobador saca el reporte de sus servicios solo en PDF: la página de reportes le trae Excel, que se le quita.
 for (const rol of ROLES_BASE) if (rol.namerol === 'APROBADOR') rol.capacidades = rol.capacidades.filter((c) => c !== 'reportes.excel');
 

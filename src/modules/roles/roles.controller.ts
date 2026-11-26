@@ -31,7 +31,8 @@ export class RolesController {
     return this.rolesService.listModulos(body?.soloActivos !== false);
   }
 
-  @Permiso('roles.ver')
+  // Quien crea o edita usuarios necesita la lista para elegir el rol, aunque no pueda entrar a «Roles y Permisos».
+  @Permiso('roles.ver', 'usuarios.usuarios.crear', 'usuarios.usuarios.editar')
   @Post('list')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Listar roles con fechas formateadas YYYY-MM-DD HH:mm:ss (POST Seguro)' })

@@ -276,7 +276,7 @@ export class TimbradasService {
     const alcance = resolverAlcance(user);
     const personas = await this.prisma.user.findMany({
       where: { ...(whereUsuariosEnAlcance(alcance) as object), ...(dto.userId ? { id: dto.userId } : {}) },
-      select: { id: true, name: true, lastname: true, createdAt: true, role: { select: { namerol: true, capacidades: true } } },
+      select: { id: true, name: true, lastname: true, nivel: true, createdAt: true, role: { select: { namerol: true, capacidades: true, categoria: true } } },
     });
     if (!personas.length) return { filas: [], personas: [], evaluacion: [] };
     const filas = await this.prisma.timbrada.findMany({
@@ -284,7 +284,7 @@ export class TimbradasService {
       orderBy: [{ fechaDia: 'desc' }, { marcadaEn: 'asc' }],
       take: FILAS_MAXIMAS,
     });
-    const mapa = new Map(personas.map((p) => [p.id, { id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '', obligatoria: !!p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') }]));
+    const mapa = new Map(personas.map((p) => [p.id, { id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '', departamento: p.role?.categoria ?? null, nivel: p.nivel ?? null, obligatoria: !!p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') }]));
     const resultado = await this.presentar(filas, mapa);
     // Se evalúa a todos: quien tiene la timbrada obligatoria, contra su horario; quien no, solo con el registro de sus marcas («No obligatorio timbrar»).
     const evaluacion = await this.horarios.evaluar(personas.map((p) => ({ id: p.id, createdAt: p.createdAt, obligatoria: !!p.role?.capacidades?.includes('rrhh.timbrada.obligatoria') })), desde, hasta, filas);
