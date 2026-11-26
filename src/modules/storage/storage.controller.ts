@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   Res,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -234,6 +235,26 @@ export class StorageController {
     }
     const url = await this.storageService.getPresignedDownloadUrl(rawKey, 3600);
     return { url };
+  }
+
+  @SoloAutenticado()
+  @Get('contenido')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Bytes de una foto de auditoría, para incrustarla en el PDF',
+    description:
+      'Excepción a la regla «todo es POST». Respaldo para cuando el navegador no puede descargar la foto directamente de S3 (CORS del bucket). Aplica los mismos permisos y alcance que /storage/presigned-url.',
+  })
+  @ApiQuery({ name: 'key', required: true, description: 'Clave S3 de la foto (o su URL completa)' })
+  @ApiResponse({ status: 200, description: 'La imagen' })
+  @ApiResponse({ status: 403, description: 'Sin permiso, fuera de alcance o no es una foto de auditoría' })
+  async contenido(@Query('key') rawKey: string, @CurrentUser() user: any): Promise<StreamableFile> {
+    // Primero las mismas comprobaciones de acceso que para ver la foto en pantalla.
+    await this.getPresignedUrl(rawKey, user);
+    const key = this.storageService.keyFromUrl(rawKey) ?? rawKey;
+    if (!CLAVE_AUDITORIA.test(key) || key.includes('..')) throw new ForbiddenException('Solo se entregan fotos de auditorías.');
+    const foto = await this.storageService.leerFoto(key);
+    return new StreamableFile(foto.bytes, { type: foto.tipo });
   }
 
   @Publico()

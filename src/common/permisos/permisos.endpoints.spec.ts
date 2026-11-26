@@ -36,7 +36,8 @@ describe('todos los endpoints declaran su permiso (falla cerrado)', () => {
       'AuthController.cambiarPassword', 'AuthController.getMe', 'AuthController.updateProfile',
       // Las notificaciones son siempre del propio usuario (Q4: pantalla de cuenta, no se apaga por rol).
       'NotificationsController.list', 'NotificationsController.marcarLeida', 'NotificationsController.marcarTodasLeidas', 'NotificationsController.resumen',
-      'StorageController.getPresignedUrl', 'StorageController.getUploadTicket', 'StorageController.uploadFile',
+      // `contenido` entrega los bytes de una foto de auditoría tras las mismas comprobaciones que `getPresignedUrl`.
+      'StorageController.contenido', 'StorageController.getPresignedUrl', 'StorageController.getUploadTicket', 'StorageController.uploadFile',
     ]);
   });
 

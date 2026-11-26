@@ -838,6 +838,17 @@ export class StorageService implements OnModuleInit {
     };
   }
 
+  /** Descarga una foto completa del almacenamiento (hasta 15 MB). Quien llama ya comprobó el acceso. */
+  public async leerFoto(key: string): Promise<{ bytes: Uint8Array; tipo: string }> {
+    if (!/\.(jpe?g|png|webp)$/i.test(key)) throw new BadRequestException('El archivo no es una foto.');
+    await this.ensureBucketRegion();
+    const res = await this.s3Client.send(new GetObjectCommand({ Bucket: this.bucketName, Key: key }));
+    if ((res.ContentLength ?? 0) > 15 * 1024 * 1024) throw new BadRequestException('La foto es demasiado pesada.');
+    const bytes = (await res.Body?.transformToByteArray()) ?? new Uint8Array();
+    const extension = key.split('.').pop()!.toLowerCase();
+    return { bytes, tipo: extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg' };
+  }
+
   public async getPresignedDownloadUrl(
     rawKey: string,
     expiresInSeconds = 3600,
