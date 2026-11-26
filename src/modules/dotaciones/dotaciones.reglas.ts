@@ -17,39 +17,43 @@ export function sumarMeses(dia: string, meses: number): string {
   return `${String(anio).padStart(4, '0')}-${String(mes).padStart(2, '0')}-${String(Math.min(d, ultimo)).padStart(2, '0')}`;
 }
 
-export interface CalendarioPlan {
-  tipo: string;
-  /** AAAA-MM-DD */
-  fechaInicio: string;
-  cadaMeses: number | null;
+/** Fecha de la siguiente entrega de un plan fijo, contada desde el día en que se cerró la anterior; `null` si el plan no se repite. */
+export function siguienteEntrega(plan: { tipo: string; cadaMeses: number | null }, desde: string): string | null {
+  if (plan.tipo !== 'FIJO' || !plan.cadaMeses || plan.cadaMeses < 1) return null;
+  return sumarMeses(desde, plan.cadaMeses);
 }
 
-/**
- * Fecha de entrega que toca generar hoy: la ocurrencia más reciente del plan entre `desde` (el día en que se creó el plan) y `hoy`.
- * Así un plan nuevo con fecha de inicio pasada no genera entregas retroactivas: la primera sale en su próxima ocurrencia.
- */
-export function ocurrenciaVigente(plan: CalendarioPlan, hoy: string, desde: string): string | null {
-  let ultima: string | null = null;
-  if (plan.tipo === 'OCASIONAL' || !plan.cadaMeses || plan.cadaMeses < 1) {
-    ultima = plan.fechaInicio <= hoy ? plan.fechaInicio : null;
-  } else {
-    for (let k = 0; k < 1200; k++) {
-      const f = sumarMeses(plan.fechaInicio, k * plan.cadaMeses);
-      if (f > hoy) break;
-      ultima = f;
-    }
-  }
-  return ultima && ultima >= desde ? ultima : null;
+/** Una entrega pendiente con fecha futura todavía no se puede registrar: se muestra como PROGRAMADA. */
+export function estadoVisible(estado: string, fecha: string, hoy: string): string {
+  return estado === 'PENDIENTE' && fecha > hoy ? 'PROGRAMADA' : estado;
 }
 
-/** Primera fecha del plan posterior a `hoy` (las entregas aún no se generan: se proyectan para mostrarlas por adelantado). */
-export function proximaOcurrencia(plan: CalendarioPlan, hoy: string): string | null {
-  if (plan.tipo === 'OCASIONAL' || !plan.cadaMeses || plan.cadaMeses < 1) return plan.fechaInicio > hoy ? plan.fechaInicio : null;
-  for (let k = 0; k < 1200; k++) {
-    const f = sumarMeses(plan.fechaInicio, k * plan.cadaMeses);
-    if (f > hoy) return f;
+/** Limpia la lista de tallas de un producto: sin vacías ni repetidas (sin distinguir mayúsculas), en el orden escrito. */
+export function normalizarTallas(tallas: string[]): string[] {
+  const vistas = new Set<string>();
+  const salida: string[] = [];
+  for (const t of tallas.map((x) => x.trim())) {
+    if (!t || vistas.has(t.toLowerCase())) continue;
+    vistas.add(t.toLowerCase());
+    salida.push(t);
   }
-  return null;
+  return salida;
+}
+
+export interface TallaEntregada {
+  talla: string;
+  cantidad: number;
+}
+
+export function leerTallas(valor: unknown): TallaEntregada[] {
+  return Array.isArray(valor) ? (valor as TallaEntregada[]).filter((t) => t && typeof t.talla === 'string' && t.cantidad > 0) : [];
+}
+
+/** "M ×2, L ×1": el reparto por talla de lo entregado. */
+export function textoTallas(tallas: unknown): string {
+  return leerTallas(tallas)
+    .map((t) => `${t.talla} ×${t.cantidad}`)
+    .join(', ');
 }
 
 /** Dónde cae una entrega respecto a hoy: lo que ya debió hacerse, lo de hoy, lo que viene o lo ya cerrado. */

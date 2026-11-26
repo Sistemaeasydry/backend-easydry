@@ -1074,6 +1074,7 @@ enum TipoNotificacion {
   TAREA_VENCIDA
   UBICACION_FALTANTE
   HORARIO_INCIDENCIA
+  DOTACION_POR_ENTREGAR
 }
 
 model Notification {
@@ -2397,11 +2398,14 @@ model ProductoDotacion {
   nombre      String
   categoriaId String
   categoria   CategoriaDotacion @relation(fields: [categoriaId], references: [id])
+  /// Total en bodega. Si el producto usa tallas es la suma del stock de sus tallas.
   stock       Int               @default(0)
+  usaTallas   Boolean           @default(false)
   activo      Boolean           @default(true)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
+  tallas       TallaDotacion[]
   movimientos  MovimientoDotacion[]
   itemsPlan    PlanDotacionItem[]
   itemsEntrega EntregaDotacionItem[]
@@ -2409,6 +2413,19 @@ model ProductoDotacion {
   @@unique([categoriaId, nombre])
   @@index([categoriaId])
   @@map("dotaciones_productos")
+}
+
+/// Talla de un producto que usa tallas, con su propio stock.
+model TallaDotacion {
+  id         String           @id @default(uuid())
+  productoId String
+  producto   ProductoDotacion @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  nombre     String
+  stock      Int              @default(0)
+  orden      Int              @default(0)
+
+  @@unique([productoId, nombre])
+  @@map("dotaciones_productos_tallas")
 }
 
 /// Cada ingreso, entrega o ajuste de stock. Inmutable.
@@ -2421,6 +2438,8 @@ model MovimientoDotacion {
   /// Positiva en INGRESO; en SALIDA la cantidad entregada (el stock baja); en AJUSTE puede ser negativa.
   cantidad     Int
   stockDespues Int
+  /// Talla afectada (solo en productos con tallas).
+  talla        String?
   nota         String?
   entregaId    String?
   actorId      String
@@ -2431,26 +2450,21 @@ model MovimientoDotacion {
   @@map("dotaciones_movimientos")
 }
 
-/// Qué se entrega, a quién (roles y/o agencias) y cuándo (fijo cada N meses u ocasional en una fecha).
+/// Qué se entrega, a quién (roles y/o agencias) y cada cuánto. Quién entrega y las fechas se definen al crear cada entrega.
 model PlanDotacion {
-  id            String   @id @default(uuid())
-  nombre        String
-  /// FIJO (se repite cada `cadaMeses`) | OCASIONAL (una sola fecha)
-  tipo          String
-  fechaInicio   DateTime @db.Date
-  cadaMeses     Int?
+  id          String   @id @default(uuid())
+  nombre      String
+  /// FIJO (al cerrar una entrega se programa la siguiente `cadaMeses` después) | OCASIONAL (una sola vez)
+  tipo        String
+  cadaMeses   Int?
   /// Nombres de rol a los que aplica (vacío = todos los roles).
-  roles         String[] @default([])
+  roles       String[] @default([])
   /// Ids de agencia a las que aplica (vacío = todas).
-  agenciasIds   String[] @default([])
-  /// PERSONAS (una entrega y una firma por persona) | AGENCIA (una sola entrega por agencia, la firma quien la recibe).
-  modoEntrega   String   @default("PERSONAS")
-  /// Coordinador que sale a entregar: solo él ve y registra las entregas de este plan (quien gestiona dotaciones ve todas).
-  coordinadorId String?
-  activo        Boolean  @default(true)
-  creadoPorId   String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  agenciasIds String[] @default([])
+  activo      Boolean  @default(true)
+  creadoPorId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   items    PlanDotacionItem[]
   entregas EntregaDotacion[]
@@ -2479,6 +2493,8 @@ model EntregaDotacion {
   /// Null cuando la entrega es a una agencia completa (plan en modo AGENCIA).
   personaId         String?
   persona           User?        @relation(fields: [personaId], references: [id])
+  /// Coordinador que sale a entregar: solo él la ve y la registra (quien gestiona dotaciones ve todas).
+  coordinadorId     String?
   /// personaId, o `agencia:<id>` en modo AGENCIA: identifica el destino para no repetir la entrega.
   claveDestino      String
   /// Cuántas personas cubre la entrega a una agencia (las cantidades del plan se multiplican por esto).
@@ -2503,6 +2519,7 @@ model EntregaDotacion {
   @@unique([planId, claveDestino, fechaProgramada])
   @@index([estado, fechaProgramada])
   @@index([personaId])
+  @@index([coordinadorId])
   @@map("dotaciones_entregas")
 }
 
@@ -2514,6 +2531,8 @@ model EntregaDotacionItem {
   producto          ProductoDotacion @relation(fields: [productoId], references: [id])
   cantidadPlan      Int
   cantidadEntregada Int?
+  /// Reparto por talla de lo entregado: [{ "talla": "M", "cantidad": 2 }].
+  tallas            Json?
 
   @@index([entregaId])
   @@map("dotaciones_entregas_items")

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agruparPorAgencia, claveDestino, compararEntregas, FIRMA_PNG, momentoDeEntrega, ocurrenciaVigente, personaEnPlan, proximaOcurrencia, sumarMeses } from './dotaciones.reglas.js';
+import { agruparPorAgencia, claveDestino, compararEntregas, FIRMA_PNG, momentoDeEntrega, estadoVisible, normalizarTallas, personaEnPlan, siguienteEntrega, sumarMeses, textoTallas } from './dotaciones.reglas.js';
 
 describe('sumarMeses', () => {
   it('conserva el día y cruza de año', () => {
@@ -14,49 +14,31 @@ describe('sumarMeses', () => {
   });
 });
 
-describe('ocurrenciaVigente', () => {
-  const fijo = { tipo: 'FIJO', fechaInicio: '2026-01-10', cadaMeses: 6 };
-
-  it('devuelve la ocurrencia más reciente dentro de [desde, hoy]', () => {
-    expect(ocurrenciaVigente(fijo, '2026-07-10', '2026-01-01')).toBe('2026-07-10');
-    expect(ocurrenciaVigente(fijo, '2026-07-20', '2026-01-01')).toBe('2026-07-10');
+describe('siguienteEntrega', () => {
+  it('cuenta los meses desde el día en que se entregó, no desde la fecha que estaba programada', () => {
+    expect(siguienteEntrega({ tipo: 'FIJO', cadaMeses: 6 }, '2026-07-16')).toBe('2027-01-16');
   });
 
-  it('no genera retroactivo: un plan creado después de la ocurrencia espera a la siguiente', () => {
-    expect(ocurrenciaVigente(fijo, '2026-11-19', '2026-11-19')).toBeNull();
-    expect(ocurrenciaVigente(fijo, '2027-01-10', '2026-11-19')).toBe('2027-01-10');
-  });
-
-  it('no genera antes de la fecha de inicio', () => {
-    expect(ocurrenciaVigente({ tipo: 'FIJO', fechaInicio: '2026-12-01', cadaMeses: 3 }, '2026-11-19', '2026-11-19')).toBeNull();
-  });
-
-  it('ocasional: solo su fecha', () => {
-    const o = { tipo: 'OCASIONAL', fechaInicio: '2026-12-01', cadaMeses: null };
-    expect(ocurrenciaVigente(o, '2026-11-30', '2026-11-19')).toBeNull();
-    expect(ocurrenciaVigente(o, '2026-12-01', '2026-11-19')).toBe('2026-12-01');
-    expect(ocurrenciaVigente(o, '2027-05-01', '2026-11-19')).toBe('2026-12-01');
+  it('un plan ocasional o sin repetición no programa otra', () => {
+    expect(siguienteEntrega({ tipo: 'OCASIONAL', cadaMeses: null }, '2026-07-16')).toBeNull();
+    expect(siguienteEntrega({ tipo: 'FIJO', cadaMeses: null }, '2026-07-16')).toBeNull();
   });
 });
 
-describe('proximaOcurrencia', () => {
-  const fijo = { tipo: 'FIJO', fechaInicio: '2026-01-10', cadaMeses: 6 };
-
-  it('es la primera fecha del plan posterior a hoy', () => {
-    expect(proximaOcurrencia(fijo, '2026-07-09')).toBe('2026-07-10');
-    expect(proximaOcurrencia(fijo, '2026-07-10')).toBe('2027-01-10');
-    expect(proximaOcurrencia(fijo, '2026-11-25')).toBe('2027-01-10');
+describe('estadoVisible y tallas', () => {
+  it('una pendiente con fecha futura se muestra como programada', () => {
+    expect(estadoVisible('PENDIENTE', '2026-12-01', '2026-11-25')).toBe('PROGRAMADA');
+    expect(estadoVisible('PENDIENTE', '2026-11-25', '2026-11-25')).toBe('PENDIENTE');
+    expect(estadoVisible('ENTREGADA', '2026-12-01', '2026-11-25')).toBe('ENTREGADA');
   });
 
-  it('un plan que aún no empieza proyecta su primera fecha', () => {
-    expect(proximaOcurrencia({ tipo: 'FIJO', fechaInicio: '2026-12-01', cadaMeses: 3 }, '2026-11-25')).toBe('2026-12-01');
+  it('limpia las tallas vacías y repetidas conservando el orden', () => {
+    expect(normalizarTallas([' S ', 'M', '', 'm', '40'])).toEqual(['S', 'M', '40']);
   });
 
-  it('ocasional: solo si su fecha es futura', () => {
-    const o = { tipo: 'OCASIONAL', fechaInicio: '2026-12-01', cadaMeses: null };
-    expect(proximaOcurrencia(o, '2026-11-30')).toBe('2026-12-01');
-    expect(proximaOcurrencia(o, '2026-12-01')).toBeNull();
-    expect(proximaOcurrencia(o, '2027-01-01')).toBeNull();
+  it('describe el reparto por talla', () => {
+    expect(textoTallas([{ talla: 'M', cantidad: 2 }, { talla: 'L', cantidad: 1 }])).toBe('M ×2, L ×1');
+    expect(textoTallas(null)).toBe('');
   });
 });
 

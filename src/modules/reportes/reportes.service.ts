@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { textoTallas } from '../dotaciones/dotaciones.reglas.js';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { HorariosService } from '../rrhh/horarios.service.js';
@@ -1573,7 +1574,9 @@ export class ReportesService {
         rol: e.persona ? titulo(e.persona.role?.namerol) : 'Agencia',
         agencia: e.persona ? (e.persona.agencia?.nombre ?? e.persona.bodega?.nombre ?? '') : (nombreAgencia.get(e.agenciaId ?? '') ?? ''),
         plan: e.plan.nombre,
-        productos: e.items.map((i) => `${i.producto.nombre} x${i.cantidadEntregada ?? i.cantidadPlan}`).join(', '),
+        productos: e.items
+          .map((i) => `${i.producto.nombre} x${i.cantidadEntregada ?? i.cantidadPlan}${textoTallas(i.tallas) ? ` (${textoTallas(i.tallas)})` : ''}`)
+          .join(', '),
         estado: titulo(e.estado),
         entregadaEn: e.entregadaEn ? fechaEcuador(e.entregadaEn) : '',
         entregadaPor: e.entregadaPorId ? (nombreEntregador.get(e.entregadaPorId) ?? '') : '',
@@ -1582,8 +1585,12 @@ export class ReportesService {
   }
 
   private async dotacionesStock(_ctx: Ctx): Promise<Bruta[]> {
-    const productos = await this.prisma.productoDotacion.findMany({ include: { categoria: { select: { nombre: true } } }, orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }] });
-    return productos.map((p) => ({ grupo: 'unico', fila: { categoria: p.categoria.nombre, producto: p.nombre, stock: p.stock, estado: p.activo ? 'Activo' : 'Inactivo' } }));
+    const productos = await this.prisma.productoDotacion.findMany({ include: { categoria: { select: { nombre: true } }, tallas: { orderBy: { orden: 'asc' } } }, orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }] });
+    // Un producto con tallas sale con una fila por talla.
+    return productos.flatMap((p) => {
+      const filas = p.usaTallas && p.tallas.length ? p.tallas.map((t) => ({ nombre: `${p.nombre} · talla ${t.nombre}`, stock: t.stock })) : [{ nombre: p.nombre, stock: p.stock }];
+      return filas.map((f) => ({ grupo: 'unico', fila: { categoria: p.categoria.nombre, producto: f.nombre, stock: f.stock, estado: p.activo ? 'Activo' : 'Inactivo' } }));
+    });
   }
 
 

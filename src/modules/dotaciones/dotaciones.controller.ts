@@ -4,15 +4,19 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Permiso } from '../../common/permisos/permisos.decorators.js';
 import { DotacionesService } from './dotaciones.service.js';
 import {
+  CrearEntregasDto,
   EntregaIdDto,
   EstadoPlanDto,
   GuardarCategoriaDto,
   GuardarPlanDto,
   GuardarProductoDto,
+  IdDto,
   IngresoStockDto,
   ListarEntregasDto,
   OmitirEntregaDto,
+  PlanIdDto,
   ProductoIdDto,
+  ReasignarEntregaDto,
   RegistrarEntregaDto,
 } from './dto/dotaciones.dto.js';
 
@@ -44,6 +48,14 @@ export class DotacionesController {
     return this.dotaciones.guardarCategoria(dto);
   }
 
+  @Permiso(...GESTIONAR_PRODUCTOS)
+  @Post('categorias/eliminar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Eliminar una categoría sin productos' })
+  eliminarCategoria(@Body() dto: IdDto) {
+    return this.dotaciones.eliminarCategoria(dto.id);
+  }
+
   @Permiso('dotaciones.ver')
   @Post('productos/list')
   @HttpCode(HttpStatus.OK)
@@ -58,6 +70,14 @@ export class DotacionesController {
   @ApiOperation({ summary: 'Crear o editar un producto (el stock solo cambia con ingresos y entregas)' })
   guardarProducto(@Body() dto: GuardarProductoDto) {
     return this.dotaciones.guardarProducto(dto);
+  }
+
+  @Permiso(...GESTIONAR_PRODUCTOS)
+  @Post('productos/eliminar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Eliminar un producto que no está en planes ni entregas' })
+  eliminarProducto(@Body() dto: IdDto) {
+    return this.dotaciones.eliminarProducto(dto.id);
   }
 
   @Permiso(...INGRESO)
@@ -100,6 +120,14 @@ export class DotacionesController {
     return this.dotaciones.estadoPlan(dto);
   }
 
+  @Permiso(...GESTIONAR_PLANES)
+  @Post('planes/eliminar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Eliminar un plan sin entregas realizadas' })
+  eliminarPlan(@Body() dto: IdDto) {
+    return this.dotaciones.eliminarPlan(dto.id);
+  }
+
   @Permiso('dotaciones.ver')
   @Post('entregas/list')
   @HttpCode(HttpStatus.OK)
@@ -122,6 +150,30 @@ export class DotacionesController {
   @ApiOperation({ summary: 'Personas que pueden salir a entregar (rol con permiso de registrar entregas)' })
   listarCoordinadores() {
     return this.dotaciones.listarCoordinadores();
+  }
+
+  @Permiso(...GESTIONAR_PLANES)
+  @Post('entregas/destinos')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Personas y agencias a las que se les puede crear una entrega de un plan' })
+  destinosDeEntrega(@Body() dto: PlanIdDto) {
+    return this.dotaciones.destinosParaEntrega(dto.planId);
+  }
+
+  @Permiso(...GESTIONAR_PLANES)
+  @Post('entregas/crear')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Crear entregas: a quién, quién las entrega y en qué fecha' })
+  crearEntregas(@Body() dto: CrearEntregasDto) {
+    return this.dotaciones.crearEntregas(dto);
+  }
+
+  @Permiso(...GESTIONAR_PLANES)
+  @Post('entregas/reasignar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cambiar quién hace una entrega pendiente' })
+  reasignarEntrega(@Body() dto: ReasignarEntregaDto) {
+    return this.dotaciones.reasignarEntrega(dto);
   }
 
   @Permiso(...ENTREGAR)

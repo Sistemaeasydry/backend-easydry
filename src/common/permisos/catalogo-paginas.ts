@@ -372,7 +372,7 @@ export const PAGINAS: readonly PaginaDef[] = [
       accion('dotaciones.productos.ingreso', 'Registrar ingreso de stock', ['dotaciones.gestionar']),
     ]),
     sub('dotaciones', 'planes', 'Planes de dotación', ['dotaciones.ver'], [
-      accion('dotaciones.planes.gestionar', 'Crear, editar y desactivar planes', ['dotaciones.gestionar']),
+      accion('dotaciones.planes.gestionar', 'Gestionar planes y crear o reasignar entregas', ['dotaciones.gestionar']),
     ]),
   ]),
 
