@@ -34,6 +34,9 @@ const dia = (d: Date) => d.toISOString().slice(0, 10);
  * lavadores, auxiliares, líderes y backup, dentro del de su agencia; los demás roles, dentro del de cualquier agencia con ubicación.
  * Una marca no se edita ni se borra.
  */
+/** Lo que se muestra del lugar contra el que se validó una marca. */
+const CAMPOS_LUGAR = { id: true, nombre: true, direccion: true, latitud: true, longitud: true } as const;
+
 @Injectable()
 export class TimbradasService {
   private readonly logger = new Logger(TimbradasService.name);
@@ -295,10 +298,15 @@ export class TimbradasService {
     const agenciaIds = [...new Set(filas.map((f) => f.agenciaId).filter(Boolean))] as string[];
     const bodegaIds = [...new Set(filas.map((f) => f.bodegaId).filter(Boolean))] as string[];
     const [agencias, bodegas] = await Promise.all([
-      agenciaIds.length ? this.prisma.agencia.findMany({ where: { id: { in: agenciaIds } }, select: { id: true, nombre: true } }) : [],
-      bodegaIds.length ? this.prisma.bodega.findMany({ where: { id: { in: bodegaIds } }, select: { id: true, nombre: true } }) : [],
+      agenciaIds.length ? this.prisma.agencia.findMany({ where: { id: { in: agenciaIds } }, select: CAMPOS_LUGAR }) : [],
+      bodegaIds.length ? this.prisma.bodega.findMany({ where: { id: { in: bodegaIds } }, select: CAMPOS_LUGAR }) : [],
     ]);
-    const nombreSitio = new Map<string, string>([...agencias, ...bodegas].map((s) => [s.id, s.nombre]));
+    const lugares = new Map([...agencias, ...bodegas].map((s) => [s.id, s]));
+    // La ubicación es la configurada hoy (para el mapa); la distancia guardada en la marca es la que se midió al timbrar.
+    const lugar = (tipo: 'AGENCIA' | 'BODEGA', id: string) => {
+      const s = lugares.get(id);
+      return { tipo, nombre: s?.nombre ?? '', direccion: s?.direccion ?? null, latitud: s?.latitud ?? null, longitud: s?.longitud ?? null };
+    };
     return {
       filas: filas.map((f) => ({
         id: f.id,
@@ -315,7 +323,7 @@ export class TimbradasService {
         longitud: f.longitud,
         precisionM: f.precisionM,
         verificacion: f.verificacion,
-        sitio: f.agenciaId ? { tipo: 'AGENCIA', nombre: nombreSitio.get(f.agenciaId) ?? '' } : f.bodegaId ? { tipo: 'BODEGA', nombre: nombreSitio.get(f.bodegaId) ?? '' } : null,
+        sitio: f.agenciaId ? lugar('AGENCIA', f.agenciaId) : f.bodegaId ? lugar('BODEGA', f.bodegaId) : null,
         distanciaM: f.distanciaM,
         radioM: f.radioM,
       })),
