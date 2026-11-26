@@ -203,7 +203,8 @@ export class InventarioController {
     return this.inventarioService.obtenerStockAgenciasResumen(dto, user?.id);
   }
 
-  @Permiso('inventario.ver', 'despachos.ver', 'envios.crear')
+  // Quien crea o edita usuarios elige la bodega del Asistente de Bodega.
+  @Permiso('inventario.ver', 'despachos.ver', 'envios.crear', 'usuarios.usuarios.crear', 'usuarios.usuarios.editar')
   @Post('bodegas/list')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Listar bodegas del sistema (Central y Regionales)' })
