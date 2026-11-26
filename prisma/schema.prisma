@@ -127,6 +127,8 @@ model User {
   cedula       String? @unique
   /// Ciudad de residencia o de trabajo de la persona (texto libre).
   ciudad       String?
+  /// JUNIOR | SENIOR. Etiqueta para identificar al personal operativo; los roles administrativos no la usan.
+  nivel        String?
   roleId       String
   role         Role    @relation(fields: [roleId], references: [id])
 
@@ -1884,7 +1886,7 @@ model InformeNovedad {
   estadoSeguimiento String            @default("ABIERTA")
   registradaEn      DateTime          @default(now())
   orden             Int               @default(0)
-  /// Quién recibe la tarea de RRHH que nace de esta novedad al guardar el informe (opcional). La tarea creada queda en `tareas_rrhh.novedadId`.
+  /// Histórico: antes las tareas nacían de las novedades. Hoy nacen de los planes de acción y esto ya no se escribe.
   responsableId     String?
 
   @@index([informeId])
@@ -1917,6 +1919,8 @@ model InformePlanAccion {
   areaResponsable       String            @default("")
   personaResponsable    String            @default("")
   fechaCompromiso       DateTime?         @db.Date
+  /// Quién recibe la tarea de RRHH que nace de este plan al guardar el informe (opcional). La tarea creada queda en `tareas_rrhh.planId`.
+  responsableId         String?
   /// BAJA | MEDIA | ALTA | CRITICA
   prioridad             String            @default("MEDIA")
   /// PENDIENTE | EN_PROCESO | COMPLETADO | CANCELADO (VENCIDO se calcula: compromiso pasado y aún abierto)
@@ -2312,7 +2316,10 @@ model TareaRrhh {
   vencidaAvisadaEn  DateTime?
   /// Origen: informe de inspección y novedad que la generó.
   informeId         String?
+  /// Solo en las tareas antiguas, que nacían de una novedad.
   novedadId         String?     @unique
+  /// Plan de acción del informe que la generó.
+  planId            String?     @unique
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 

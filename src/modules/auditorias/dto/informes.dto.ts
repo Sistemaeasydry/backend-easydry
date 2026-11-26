@@ -58,9 +58,6 @@ export class NovedadDto {
   @IsOptional() @IsString() @MaxLength(120) area?: string;
   @ApiPropertyOptional({ type: [String], maxItems: 12, description: 'Claves de las fotos ya subidas (máx. 12)' })
   @IsOptional() @IsArray() @ArrayMaxSize(12) @IsString({ each: true }) @MaxLength(600, { each: true }) fotos?: string[];
-  /** Opcional: quien recibe una tarea de RRHH con esta novedad al guardar el informe. Sin responsable no hay tarea. */
-  @ApiPropertyOptional({ format: 'uuid', description: 'Opcional: quien recibe una tarea de RRHH con esta novedad al guardar el informe' })
-  @IsOptional() @IsUUID() responsableId?: string;
 }
 
 export class ActividadDto {
@@ -83,6 +80,9 @@ export class PlanAccionDto {
   @IsOptional() @IsString() @MaxLength(TEXTO_LARGO) accionRequerida?: string;
   @ApiPropertyOptional({ type: [String], maxItems: 12, description: 'Claves de las fotos de evidencia de cumplimiento (máx. 12)' })
   @IsOptional() @IsArray() @ArrayMaxSize(12) @IsString({ each: true }) @MaxLength(600, { each: true }) evidenciaCumplimiento?: string[];
+  /** Opcional: quien recibe una tarea de RRHH con este plan al guardar el informe. Sin responsable no hay tarea. */
+  @ApiPropertyOptional({ format: 'uuid', description: 'Opcional: quien recibe una tarea de RRHH con este plan al guardar el informe' })
+  @IsOptional() @IsUUID() responsableId?: string;
 }
 
 export class GuardarInformeDto {

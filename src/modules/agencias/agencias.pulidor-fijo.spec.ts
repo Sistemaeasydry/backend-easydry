@@ -24,6 +24,7 @@ describe('un pulidor fijo por agencia (base real)', () => {
     password: 'Pulidor#Fijo9x7',
     rolNombre: 'PULIDOR',
     agenciaId,
+    nivel: 'JUNIOR',
   });
 
   beforeAll(async () => {
@@ -61,7 +62,7 @@ describe('un pulidor fijo por agencia (base real)', () => {
   });
 
   it('updateUsuario: no se bloquea a sí mismo al reguardar sin cambiar de agencia', async () => {
-    await expect(service.updateUsuario({ id: fijo.id, name: 'Moises Eduardo' } as any)).resolves.toBeDefined();
+    await expect(service.updateUsuario({ id: fijo.id, name: 'Moises Eduardo', nivel: 'SENIOR' } as any)).resolves.toBeDefined();
     const enBase = await env.prisma.user.findUniqueOrThrow({ where: { id: fijo.id } });
     expect(enBase.name).toBe('Moises Eduardo');
     expect(enBase.agenciaId).toBe(conFijo.id);

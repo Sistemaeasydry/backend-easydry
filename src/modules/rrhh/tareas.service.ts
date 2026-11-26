@@ -13,7 +13,7 @@ import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 const AMBITO_PERSONA = { agenciaId: true, regionId: true, agencia: { select: { nombre: true, regionId: true } }, bodega: { select: { regionId: true } } } as const;
 
 const INCLUIR_TAREA = {
-  asignadoA: { select: { id: true, name: true, lastname: true, estado: true, ...AMBITO_PERSONA } },
+  asignadoA: { select: { nivel: true, role: { select: { categoria: true } }, id: true, name: true, lastname: true, estado: true, ...AMBITO_PERSONA } },
   asignadoPor: { select: { id: true, name: true, lastname: true } },
   adjuntos: { orderBy: { createdAt: 'asc' } },
   historial: { orderBy: { createdAt: 'asc' } },
@@ -25,7 +25,7 @@ const nombreDe = (u: { name: string; lastname: string } | null | undefined) => (
 
 export interface DatosTareaDeInforme {
   informeId: string;
-  novedadId: string;
+  planId: string;
   titulo: string;
   descripcion: string;
   asignadoAId: string;
@@ -128,7 +128,7 @@ export class TareasService {
       fechaLimite: t.fechaLimite,
       estado: t.estado,
       vencida: tareaVencida(t, ahora),
-      asignadoA: { id: t.asignadoA.id, nombre: apellidosNombres(t.asignadoA), agencia: t.asignadoA.agencia?.nombre ?? null, activo: t.asignadoA.estado === 1 },
+      asignadoA: { id: t.asignadoA.id, nombre: apellidosNombres(t.asignadoA), agencia: t.asignadoA.agencia?.nombre ?? null, activo: t.asignadoA.estado === 1, departamento: t.asignadoA.role?.categoria ?? null, nivel: t.asignadoA.nivel ?? null },
       asignadoPor: { id: t.asignadoPor.id, nombre: apellidosNombres(t.asignadoPor) },
       respuesta: t.respuesta,
       creadaEn: t.createdAt,
@@ -265,12 +265,12 @@ export class TareasService {
   }
 
   /**
-   * Tarea que nace de una novedad de informe. La llama el servicio de informes al guardar el informe. Idempotente por novedad:
+   * Tarea que nace de un plan de acción de un informe. La llama el servicio de informes al guardar el informe. Idempotente por plan:
    * guardar dos veces no duplica la tarea. El responsable debe estar en el alcance de quien guarda el informe.
    */
-  async crearDesdeNovedad(datos: DatosTareaDeInforme, user: any, tx?: Prisma.TransactionClient) {
+  async crearDesdePlan(datos: DatosTareaDeInforme, user: any, tx?: Prisma.TransactionClient) {
     const db = tx ?? this.prisma;
-    const existente = await db.tareaRrhh.findUnique({ where: { novedadId: datos.novedadId }, select: { id: true } });
+    const existente = await db.tareaRrhh.findUnique({ where: { planId: datos.planId }, select: { id: true } });
     if (existente) return existente;
     const persona = await this.validarResponsable(user, datos.asignadoAId);
     const tarea = await db.tareaRrhh.create({
@@ -282,7 +282,7 @@ export class TareasService {
         agenciaId: persona.agenciaId ?? null,
         regionId: persona.regionId ?? persona.agencia?.regionId ?? persona.bodega?.regionId ?? null,
         informeId: datos.informeId,
-        novedadId: datos.novedadId,
+        planId: datos.planId,
         historial: { create: { accion: 'ASIGNADA', actorId: String(user.id), detalle: 'Desde un informe de inspección' } },
       },
     });

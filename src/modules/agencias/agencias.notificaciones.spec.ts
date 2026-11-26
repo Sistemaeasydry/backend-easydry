@@ -72,7 +72,7 @@ describe('AgenciasService — notificación de cambios de usuario (base real)', 
 
   it('updateUsuario: sin cambio de rol ni estado, no notifica', async () => {
     const uma = await env.usuario('uma', 'LIDER', { agenciaId: agencia.id, name: 'Uma' });
-    await service.updateUsuario({ id: uma.id, name: 'Uma', lastname: 'Nueva' } as any);
+    await service.updateUsuario({ id: uma.id, name: 'Uma', lastname: 'Nueva', nivel: 'JUNIOR' } as any);
     // Se da tiempo a que un envío tardío aparezca; no debe aparecer ninguno.
     await new Promise((ok) => setTimeout(ok, 500));
     expect(await env.prisma.notification.count({ where: { entidadId: uma.id } })).toBe(0);

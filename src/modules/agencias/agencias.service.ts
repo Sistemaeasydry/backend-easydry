@@ -1,4 +1,6 @@
 import { normalizarCelularEc } from '../../common/utils/telefono-ec.js';
+import { capacidadesDeUsuario } from '../../common/permisos/capacidades.js';
+import { nivelAGuardar } from '../../common/utils/nivel-personal.js';
 import {
   Injectable,
   Optional,
@@ -117,6 +119,19 @@ export class AgenciasService {
 
   private esAdmin(user: any): boolean {
     return tieneFuncion(user, FUNCION.ADMINISTRADOR);
+  }
+
+  /** A un Administrador (o para dar ese rol) solo lo gestiona otro administrador, aunque se tenga permiso de gestionar usuarios. */
+  private asegurarNoTocaAdministradores(actor: any, ...roles: Array<{ namerol?: string | null; capacidades?: string[] | null } | null | undefined>): void {
+    if (!actor || this.esAdmin(actor)) return;
+    if (roles.some((r) => r && funcionesDeRol(r.capacidades, r.namerol).has(FUNCION.ADMINISTRADOR))) {
+      throw new ForbiddenException('Solo un Admin o Super Admin puede gestionar usuarios administradores.');
+    }
+  }
+
+  /** Casilla de Gestión de Lavadores (Talento Humano): la pantalla abarca a todo el personal operativo. */
+  private veTodoElPersonalOperativo(user: any): boolean {
+    return rolDeUsuario(user) !== 'SUPER_ADMIN' && capacidadesDeUsuario(user).includes('operadores.personal_operativo');
   }
 
   /** Correo y teléfono de otros usuarios: el administrador, o quien tenga la casilla «Ver correo y teléfono». */
@@ -2311,6 +2326,7 @@ export class AgenciasService {
     if (!user) {
       throw new NotFoundException(`Usuario con ID "${dto.usuarioId}" no encontrado`);
     }
+    this.asegurarNoTocaAdministradores(actor, user.role);
     if (actor && !this.esAdmin(actor) && conFuncion(user, FUNCION.PULIDOR) && dto.agenciaId !== undefined && (dto.agenciaId || null) !== (user.agenciaId ?? null)) {
       throw new ForbiddenException('Solo un Admin o Super Admin puede cambiar de agencia a un pulidor.');
     }
@@ -2379,11 +2395,15 @@ export class AgenciasService {
     };
   }
 
-  async toggleEstadoUsuario(dto: ToggleEstadoUsuarioDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: dto.usuarioId } });
+  async toggleEstadoUsuario(dto: ToggleEstadoUsuarioDto, actor?: any) {
+    const user = await this.prisma.user.findUnique({ where: { id: dto.usuarioId }, include: { role: { select: { namerol: true, capacidades: true } } } });
     if (!user) {
       throw new NotFoundException(`Usuario con ID "${dto.usuarioId}" no encontrado`);
     }
+    if (user.role?.namerol === 'SUPER_ADMIN') {
+      throw new ForbiddenException('El usuario Super Administrador es de sistema y no puede gestionarse desde la aplicación.');
+    }
+    this.asegurarNoTocaAdministradores(actor, user.role);
 
     const nuevoEstado = dto.estado !== undefined ? dto.estado : (user.estado === 1 ? 0 : 1);
 
@@ -2582,8 +2602,11 @@ export class AgenciasService {
 
     // Si se está cambiando el rol, manda el rol nuevo (no el que tenía el usuario).
     const rolEfectivo = roleIdToSet
-      ? await this.prisma.role.findUnique({ where: { id: roleIdToSet }, select: { namerol: true, ambito: true, capacidades: true } })
-      : await this.prisma.role.findUnique({ where: { id: user.roleId }, select: { namerol: true, ambito: true, capacidades: true } });
+      ? await this.prisma.role.findUnique({ where: { id: roleIdToSet }, select: { namerol: true, ambito: true, capacidades: true, categoria: true } })
+      : await this.prisma.role.findUnique({ where: { id: user.roleId }, select: { namerol: true, ambito: true, capacidades: true, categoria: true } });
+    this.asegurarNoTocaAdministradores(actor, user.role, rolEfectivo);
+    // El nivel es obligatorio al editar a la persona (el formulario manda el nombre) o al cambiarle el rol.
+    const nivelActualizado = nivelAGuardar(rolEfectivo?.categoria, dto.nivel, user.nivel ?? null, dto.name !== undefined || (!!roleIdToSet && roleIdToSet !== user.roleId));
     const currentRoleName = rolEfectivo?.namerol || user.role?.namerol || dto.rolNombre || '';
     const fnRolUpdate = funcionesDeRol(rolEfectivo ? rolEfectivo.capacidades : user.role?.capacidades, currentRoleName);
     const ambitoRolUpdate = rolEfectivo?.ambito || '';
@@ -2755,6 +2778,7 @@ export class AgenciasService {
         ...(dto.lastname !== undefined && { lastname: dto.lastname }),
         ...(telefonoActualizado !== undefined && { telefono: telefonoActualizado }),
         ...(cedulaActualizada !== undefined && { cedula: cedulaActualizada }),
+        ...(nivelActualizado !== undefined && { nivel: nivelActualizado }),
         ...(dto.ciudad !== undefined && { ciudad: dto.ciudad.trim() || null }),
         ...(dto.email !== undefined && { email: dto.email.toLowerCase().trim() }),
         ...(dto.estado !== undefined && { estado: dto.estado }),
@@ -2827,6 +2851,7 @@ export class AgenciasService {
         agencia: updatedUser.agencia,
         region: updatedUser.region,
         bodega: updatedUser.bodega,
+        nivel: updatedUser.nivel,
         servicioIds: Array.isArray(updatedUser.servicioIds) ? updatedUser.servicioIds : [],
       },
     };
@@ -2936,18 +2961,25 @@ export class AgenciasService {
     // El rol real y su ámbito se leen de la BD: `dto.rolNombre` puede llegar con el nombre visible del rol.
     const rolAsignado = await this.prisma.role.findUnique({
       where: { id: roleIdToSet },
-      select: { namerol: true, ambito: true, capacidades: true },
+      select: { namerol: true, ambito: true, capacidades: true, categoria: true },
     });
+    this.asegurarNoTocaAdministradores(actor, rolAsignado);
+    const nivelNuevo = nivelAGuardar(rolAsignado?.categoria, dto.nivel, null, true);
     const fnRolCreate = funcionesDeRol(rolAsignado?.capacidades, rolAsignado?.namerol || dto.rolNombre || '');
     const ambitoRolCreate = rolAsignado?.ambito || '';
     const supervisorPuedeCrearBackup =
       tieneFuncion(actor, FUNCION.SUPERVISOR) &&
       tienePermiso(actor, 'backup.gestionar') &&
       fnRolCreate.has(FUNCION.BACKUP);
+    // Quien tiene la casilla «Crear usuario» (p. ej. Talento Humano) crea cualquier rol menos Backup, que sigue siendo de Admin o del
+    // coordinador regional; quien solo gestiona Backups no puede crear ningún otro.
     if (actor && !this.esAdmin(actor) && !supervisorPuedeCrearBackup) {
-      throw new ForbiddenException(
-        'Solo Admin, Super Admin o un Coordinador regional pueden crear usuarios Backup de su región.',
-      );
+      if (fnRolCreate.has(FUNCION.BACKUP)) {
+        throw new ForbiddenException(
+          'Solo Admin, Super Admin o un Coordinador regional pueden crear usuarios Backup de su región.',
+        );
+      }
+      if (!tienePermiso(actor, 'usuarios.usuarios.crear')) throw new ForbiddenException('Tu rol solo puede crear usuarios Backup de tu región.');
     }
     if (
       supervisorPuedeCrearBackup &&
@@ -3072,6 +3104,7 @@ export class AgenciasService {
         telefono: telefonoNuevo || null,
         cedula: cedulaNueva,
         ciudad: dto.ciudad?.trim() || null,
+        nivel: nivelNuevo ?? null,
         email: emailNorm,
         passwordHash,
         roleId: roleIdToSet,
@@ -3115,6 +3148,7 @@ export class AgenciasService {
         name: newUser.name,
         lastname: newUser.lastname,
         email: newUser.email,
+        nivel: newUser.nivel,
         estado: newUser.estado,
         role: newUser.role,
         agencia: newUser.agencia,
@@ -3219,6 +3253,8 @@ export class AgenciasService {
       dto.agenciaId ? { agenciaId: dto.agenciaId } : undefined,
       roles.length ? { role: { namerol: { in: roles } } } : undefined,
       dto.rolId ? { role: { id: dto.rolId } } : undefined,
+      dto.departamento ? { role: { categoria: dto.departamento } } : undefined,
+      dto.nivel ? { nivel: dto.nivel } : undefined,
       dto.estado !== undefined && dto.estado !== null ? { estado: dto.estado } : undefined,
       dto.regionId
         ? { OR: [{ regionId: dto.regionId }, { agencia: { regionId: dto.regionId } }] }
@@ -3276,7 +3312,8 @@ export class AgenciasService {
   private mapUserToOperador(u: any) {
     const rawLastname = u.lastname || '';
     const cedulaMatch = rawLastname.match(/CI:\s*([A-Za-z0-9]+)/) || (u.email || '').match(/op\.([A-Za-z0-9]+)@/);
-    const cedula = cedulaMatch ? cedulaMatch[1] : (u.email ? u.email.split('@')[0].replace('op.', '') : 'N/A');
+    // Los registros antiguos no tienen la columna cédula: se toma de lo que guardaba el correo interno del operador.
+    const cedula = cedulaMatch ? cedulaMatch[1] : '';
     const cleanLastname = rawLastname.replace(/\(CI:[^)]+\)/, '').replace(/CI:[^)]+/, '').trim();
     const fullName = `${cleanLastname} ${u.name || ''}`.trim();
     // Antes se leía `u.bahiasAsignadas` (la relación legacy 1:1 vía Bahia.operadorActualId): en
@@ -3291,6 +3328,9 @@ export class AgenciasService {
     return {
       id: u.id,
       nombre: fullName || u.name,
+      nombres: u.name || '',
+      apellidos: cleanLastname,
+      nivel: u.nivel ?? null,
       cedula: u.cedula || cedula,
       ciudad: u.ciudad ?? '',
       telefono: u.telefono ?? '',
@@ -3319,7 +3359,7 @@ export class AgenciasService {
 
   /** Filtro de operadores: rol (lavador / pulidor), agencia (un líder solo la suya) y estado. */
   private whereOperadores(
-    dto: { agenciaId?: string; estado?: number; rol?: string; categoriaRol?: string; bahiaNombre?: string; clienteNombre?: string; regionNombre?: string },
+    dto: { agenciaId?: string; estado?: number; departamento?: string; nivel?: string; rol?: string; categoriaRol?: string; bahiaNombre?: string; clienteNombre?: string; regionNombre?: string },
     currentUser?: any,
   ): any {
     const isLider = !!currentUser && tieneFuncion(currentUser, FUNCION.LIDER_AGENCIA);
@@ -3338,10 +3378,13 @@ export class AgenciasService {
     }
 
     // Filtro por un rol concreto (p. ej. PULIDOR_FIJO) dentro de lo que el usuario puede ver; LAVADOR y PULIDOR son las categorías de arriba.
-    const rolConcreto = dto.rol && dto.rol !== 'LAVADOR' && dto.rol !== 'PULIDOR' ? { namerol: dto.rol } : undefined;
+    const todoElPersonal = !isLider && this.veTodoElPersonalOperativo(currentUser);
+    // Con todo el personal operativo, cada rol del filtro es exacto (LAVADOR no agrupa a nadie más).
+    const rolConcreto = dto.rol && (todoElPersonal || (dto.rol !== 'LAVADOR' && dto.rol !== 'PULIDOR')) ? { namerol: dto.rol } : undefined;
+    const visibles: any = todoElPersonal ? { categoria: 'OPERADOR' } : permitidos;
 
     const where: any = {
-      role: rolConcreto ? { AND: [permitidos, rolConcreto] } : permitidos,
+      role: rolConcreto ? { AND: [visibles, rolConcreto] } : visibles,
     };
 
     // Scoping por Agencia:
@@ -3361,6 +3404,8 @@ export class AgenciasService {
 
     // Filtros por nombre de la pantalla de operadores (bahía asignada y cliente de la agencia).
     const extra: any[] = [];
+    if (dto.nivel) extra.push({ nivel: dto.nivel });
+    if (dto.departamento) extra.push({ role: { categoria: dto.departamento } });
     if (dto.bahiaNombre?.trim()) {
       extra.push({ bahiaOperadores: { some: { activo: true, bahia: { nombre: { contains: dto.bahiaNombre.trim(), mode: 'insensitive' } } } } });
     }
@@ -3461,19 +3506,21 @@ export class AgenciasService {
       });
     }
 
+    // Por esta pantalla solo se registran lavadores y pulidores; los demás roles tienen datos propios y se crean en «Usuarios».
+    const funciones = funcionesDeRol(role.capacidades, role.namerol);
+    if (funciones.has(FUNCION.ADMINISTRADOR) || funciones.has(FUNCION.AUXILIAR) || !(funciones.has(FUNCION.LAVADOR) || funciones.has(FUNCION.PULIDOR))) {
+      throw new ForbiddenException('Desde Gestión de Lavadores solo se registran lavadores y pulidores. Crea este rol desde «Usuarios».');
+    }
+    const nivel = nivelAGuardar(role.categoria, dto.nivel, null, true);
+
     const cedulaClean = (dto.cedula || '').trim();
+    if (cedulaClean && !/^\d{10}$/.test(cedulaClean)) throw new BadRequestException('La cédula debe tener 10 dígitos.');
+    if (cedulaClean) await this.asegurarCedulaLibre(cedulaClean);
     const emailToUse = cedulaClean 
       ? `op.${cedulaClean}@easydry.internal`
       : `op.${Date.now().toString().slice(-6)}@easydry.internal`;
 
-    const existing = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { email: emailToUse },
-          ...(cedulaClean ? [{ lastname: { contains: `CI: ${cedulaClean}` } }] : [])
-        ]
-      }
-    });
+    const existing = await this.prisma.user.findFirst({ where: { email: emailToUse } });
     if (existing) {
       throw new ConflictException(`Ya existe un lavador registrado con esta identificación/cédula (${cedulaClean})`);
     }
@@ -3484,17 +3531,13 @@ export class AgenciasService {
     exigirPasswordSegura(passwordInicial, emailToUse);
     exigirConfirmacion(passwordInicial, dto.passwordConfirmacion);
     const passwordHash = await bcrypt.hash(passwordInicial, 10);
-    const names = dto.nombre.trim().split(' ');
-    const firstName = names[0] || 'Lavador';
-    const lastNamePart = names.slice(1).join(' ');
-    const finalLastName = cedulaClean 
-      ? (lastNamePart ? `${lastNamePart} (CI: ${cedulaClean})` : `(CI: ${cedulaClean})`)
-      : (lastNamePart || 'Técnico');
-
     const newUser = await this.prisma.user.create({
       data: {
-        name: firstName,
-        lastname: finalLastName,
+        name: dto.nombres.trim(),
+        lastname: dto.apellidos.trim(),
+        cedula: cedulaClean || null,
+        telefono: normalizarCelularEc(dto.telefono) || null,
+        nivel: nivel ?? null,
         email: emailToUse,
         passwordHash,
         roleId: role.id,
@@ -3548,22 +3591,32 @@ export class AgenciasService {
   async updateOperador(dto: UpdateOperadorDto, updaterId?: string, actor?: any) {
     const user = await this.prisma.user.findUnique({
       where: { id: dto.id },
-      include: { role: { select: { namerol: true, capacidades: true } }, bahiaOperadores: { where: { activo: true }, include: { bahia: { select: { id: true, nombre: true, codigo: true, updatedAt: true } } } } }
+      include: { role: { select: { namerol: true, capacidades: true, categoria: true } }, bahiaOperadores: { where: { activo: true }, include: { bahia: { select: { id: true, nombre: true, codigo: true, updatedAt: true } } } } }
     });
     if (!user) {
       throw new NotFoundException(`Operador con ID "${dto.id}" no encontrado`);
     }
 
-    const dataToUpdate: any = {};
-    if (dto.nombre) {
-      const names = dto.nombre.trim().split(' ');
-      dataToUpdate.name = names[0];
-      const lastNamePart = names.slice(1).join(' ');
-      const cedulaClean = dto.cedula?.trim();
-      dataToUpdate.lastname = cedulaClean 
-        ? (lastNamePart ? `${lastNamePart} (CI: ${cedulaClean})` : `(CI: ${cedulaClean})`)
-        : (lastNamePart || 'Técnico');
+    if (user.role?.categoria && user.role.categoria !== 'OPERADOR') {
+      throw new ForbiddenException('Desde Gestión de Lavadores solo se edita al personal operativo.');
     }
+
+    // Vacío = no tocar: quien no puede editar datos manda esos campos sin valor.
+    const dataToUpdate: any = {};
+    if (dto.nombres?.trim()) dataToUpdate.name = dto.nombres.trim();
+    if (dto.apellidos?.trim()) dataToUpdate.lastname = dto.apellidos.trim();
+    const cedulaNueva = dto.cedula?.trim();
+    if (cedulaNueva && cedulaNueva !== (user.cedula ?? '')) {
+      if (!/^\d{10}$/.test(cedulaNueva)) throw new BadRequestException('La cédula debe tener 10 dígitos.');
+      await this.asegurarCedulaLibre(cedulaNueva, user.id);
+      dataToUpdate.cedula = cedulaNueva;
+    }
+    if (dto.telefono !== undefined) {
+      const telefono = normalizarCelularEc(dto.telefono) || null;
+      if (telefono !== (user.telefono ?? null)) dataToUpdate.telefono = telefono;
+    }
+    const nivel = nivelAGuardar(user.role?.categoria, dto.nivel, user.nivel ?? null, !!dto.nombres?.trim());
+    if (nivel !== undefined && nivel !== (user.nivel ?? null)) dataToUpdate.nivel = nivel;
     if (dto.estado !== undefined) {
       dataToUpdate.estado = dto.estado;
     }
@@ -3584,6 +3637,7 @@ export class AgenciasService {
       (dataToUpdate.name !== undefined && dataToUpdate.name !== user.name) ||
       (dataToUpdate.lastname !== undefined && dataToUpdate.lastname !== user.lastname) ||
       (dataToUpdate.estado !== undefined && dataToUpdate.estado !== user.estado) ||
+      ['cedula', 'telefono', 'nivel'].some((campo) => dataToUpdate[campo] !== undefined) ||
       (dataToUpdate.agenciaId !== undefined && dataToUpdate.agenciaId !== user.agenciaId);
     if (cambiaDatos) this.exigirPermiso(actor, ['operadores.editar'], 'editar los datos de lavadores y pulidores');
     const cambiaAgenciaOperador = dataToUpdate.agenciaId !== undefined && dataToUpdate.agenciaId !== (user.agenciaId ?? null);
@@ -3672,10 +3726,11 @@ const SELECT_USUARIO_LISTA = {
   telefono: true,
   cedula: true,
   ciudad: true,
+  nivel: true,
   name: true,
   lastname: true,
   estado: true,
-  role: { select: { id: true, namerol: true, capacidades: true } },
+  role: { select: { id: true, namerol: true, capacidades: true, categoria: true } },
   agenciaId: true,
   agencia: { select: { id: true, codigo: true, nombre: true } },
   regionId: true,

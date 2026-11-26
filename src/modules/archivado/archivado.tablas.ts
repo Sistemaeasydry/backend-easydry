@@ -568,6 +568,7 @@ export const TABLAS_OPERACION: TablaArchivable[] = [
       { nombre: 'vencidaAvisadaEn', tipo: 'TIMESTAMP' },
       { nombre: 'informeId', tipo: 'STRING' },
       { nombre: 'novedadId', tipo: 'STRING' },
+      { nombre: 'planId', tipo: 'STRING' },
       { nombre: 'createdAt', tipo: 'TIMESTAMP' },
       { nombre: 'updatedAt', tipo: 'TIMESTAMP' },
     ],

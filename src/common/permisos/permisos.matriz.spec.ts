@@ -71,12 +71,12 @@ describe('matriz acordada de permisos por rol', () => {
     expect(permisos.sort()).toEqual(['informes.ver', 'inspecciones.ver', 'rrhh.tareas.propias', 'rrhh.timbrada.obligatoria', 'rrhh.timbrar']);
   });
 
-  it('RRHH: todos timbran y reciben tareas menos ADMIN y SUPER_ADMIN; asignan solo los acordados; las ubicaciones, solo los administradores', () => {
+  it('RRHH: todos reciben tareas y todos timbran menos ADMIN y SUPER_ADMIN; asignan solo los acordados; las ubicaciones, solo los administradores', () => {
     const todos = ROLES_BASE.map((r) => r.namerol);
     // Timbran todos menos ADMIN y SUPER_ADMIN. La timbrada solo es obligatoria para quien tiene `rrhh.timbrada.obligatoria`: tampoco el APROBADOR.
     expect(rolesCon('rrhh.timbrar').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN'].includes(n)).sort());
     expect(rolesCon('rrhh.timbrada.obligatoria').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN', 'APROBADOR'].includes(n)).sort());
-    expect(rolesCon('rrhh.tareas.propias').sort()).toEqual(todos.filter((n) => !['ADMIN', 'SUPER_ADMIN'].includes(n)).sort());
+    expect(rolesCon('rrhh.tareas.propias').sort()).toEqual([...todos].sort());
     const asignan = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORD_COMERCIAL', 'COORD_SERVICIOS_ESPECIALES', 'COORD_MANTENIMIENTO', 'COORD_BODEGA', 'TALENTO_HUMANO', 'AUXILIAR'].sort();
     expect(rolesCon('rrhh.tareas.asignar').sort()).toEqual(asignan);
     // El personal operativo (lavador, pulidor, líder y backup) solo recibe tareas; el líder y el backup sí ven las timbradas de su agencia.
@@ -315,10 +315,12 @@ describe('matriz acordada de permisos por rol', () => {
       'SUPERVISOR',
       'SUPER_ADMIN',
     ]);
+    // Talento Humano asigna bahías al gestionar al personal operativo desde Gestión de Lavadores.
     expect(rolesCon('bahias.asignar')).toEqual([
       'ADMIN',
       'SUPERVISOR',
       'SUPER_ADMIN',
+      'TALENTO_HUMANO',
     ]);
   });
 

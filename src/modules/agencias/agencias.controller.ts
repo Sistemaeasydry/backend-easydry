@@ -418,7 +418,7 @@ export class AgenciasController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Activar o desactivar usuario (1/0) (SUPER_ADMIN, ADMIN)' })
   async toggleEstadoUsuario(@Body() dto: ToggleEstadoUsuarioDto, @CurrentUser() user: any) {
-    return this.agenciasService.toggleEstadoUsuario(dto);
+    return this.agenciasService.toggleEstadoUsuario(dto, user);
   }
 
   @Permiso('usuarios.usuarios.password')

@@ -147,6 +147,7 @@ export const PAGINAS: readonly PaginaDef[] = [
     accion('operadores.registrar', 'Registrar lavador o pulidor', ['operadores.gestionar']),
     accion('operadores.editar', 'Editar datos', ['operadores.gestionar']),
     accion('operadores.bahia.asignar', 'Asignar y quitar de bahía', ['bahias.asignar']),
+    accion('operadores.personal_operativo', 'Ver en esta pantalla a todo el personal operativo (líderes, backups, auxiliares, técnicos…)', [], { migrarSi: ['__nunca__'] }),
   ]),
 
   pagina('servicios', 'Servicios de Lavado', '/servicios', 'servicios', ['agencias.ver', 'catalogo.ver'], [
