@@ -2391,6 +2391,8 @@ model CategoriaDotacion {
   id        String   @id @default(uuid())
   nombre    String   @unique
   activa    Boolean  @default(true)
+  /// Eliminado desde la pantalla: ya no se lista, pero se conserva para el historial de entregas y movimientos.
+  eliminadoEn DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2409,6 +2411,8 @@ model ProductoDotacion {
   stock       Int               @default(0)
   usaTallas   Boolean           @default(false)
   activo      Boolean           @default(true)
+  /// Eliminado desde la pantalla: ya no se lista, pero se conserva para el historial de entregas y movimientos.
+  eliminadoEn DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
@@ -2470,6 +2474,8 @@ model PlanDotacion {
   agenciasIds String[] @default([])
   activo      Boolean  @default(true)
   creadoPorId String
+  /// Eliminado desde la pantalla: ya no se lista, pero se conserva para el historial de entregas y movimientos.
+  eliminadoEn DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

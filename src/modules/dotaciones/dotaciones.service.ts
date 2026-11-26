@@ -37,6 +37,8 @@ import { apellidosNombres } from '../../common/utils/nombre-persona.js';
 
 const nombreDe = (u: { name: string; lastname: string }) => apellidosNombres(u);
 const dia = (d: Date) => d.toISOString().slice(0, 10);
+/** Un nombre eliminado queda libre para volver a usarse; en el historial se ve marcado como eliminado. */
+const nombreEliminado = (nombre: string, id: string) => `${nombre} (eliminado ${id.slice(0, 4)})`;
 
 const INCLUIR_PLAN = { items: { include: { producto: { select: { nombre: true } } } } } satisfies Prisma.PlanDotacionInclude;
 
@@ -78,7 +80,11 @@ export class DotacionesService {
   // ───────────────────────── Categorías y productos ─────────────────────────
 
   async listarCategorias() {
-    const categorias = await this.prisma.categoriaDotacion.findMany({ orderBy: { nombre: 'asc' }, include: { _count: { select: { productos: true } } } });
+    const categorias = await this.prisma.categoriaDotacion.findMany({
+      where: { eliminadoEn: null },
+      orderBy: { nombre: 'asc' },
+      include: { _count: { select: { productos: { where: { eliminadoEn: null } } } } },
+    });
     return categorias.map((c) => ({ id: c.id, nombre: c.nombre, activa: c.activa, productos: c._count.productos }));
   }
 
@@ -88,7 +94,7 @@ export class DotacionesService {
     return this.unico(async () => {
       if (dto.id) {
         const existe = await this.prisma.categoriaDotacion.findUnique({ where: { id: dto.id } });
-        if (!existe) throw new NotFoundException('La categoría no existe.');
+        if (!existe || existe.eliminadoEn) throw new NotFoundException('La categoría no existe.');
         return this.prisma.categoriaDotacion.update({ where: { id: dto.id }, data: { nombre, ...(dto.activa === undefined ? {} : { activa: dto.activa }) } });
       }
       return this.prisma.categoriaDotacion.create({ data: { nombre } });
@@ -96,15 +102,16 @@ export class DotacionesService {
   }
 
   async eliminarCategoria(id: string) {
-    const categoria = await this.prisma.categoriaDotacion.findUnique({ where: { id }, include: { _count: { select: { productos: true } } } });
-    if (!categoria) throw new NotFoundException('La categoría no existe.');
+    const categoria = await this.prisma.categoriaDotacion.findUnique({ where: { id }, include: { _count: { select: { productos: { where: { eliminadoEn: null } } } } } });
+    if (!categoria || categoria.eliminadoEn) throw new NotFoundException('La categoría no existe.');
     if (categoria._count.productos) throw new BadRequestException('La categoría tiene productos: elimínalos o cámbialos de categoría primero.');
-    await this.prisma.categoriaDotacion.delete({ where: { id } });
+    await this.prisma.categoriaDotacion.update({ where: { id }, data: { eliminadoEn: new Date(), activa: false, nombre: nombreEliminado(categoria.nombre, id) } });
     return { id };
   }
 
   async listarProductos() {
     const productos = await this.prisma.productoDotacion.findMany({
+      where: { eliminadoEn: null },
       orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }],
       include: { categoria: { select: { id: true, nombre: true } }, tallas: { orderBy: { orden: 'asc' } } },
     });
@@ -118,12 +125,12 @@ export class DotacionesService {
     const nombre = dto.nombre.trim();
     if (!nombre) throw new BadRequestException('Escribe el nombre del producto.');
     const categoria = await this.prisma.categoriaDotacion.findUnique({ where: { id: dto.categoriaId } });
-    if (!categoria) throw new BadRequestException('La categoría no existe.');
+    if (!categoria || categoria.eliminadoEn) throw new BadRequestException('La categoría no existe.');
     return this.unico(
       () =>
         this.prisma.$transaction(async (tx) => {
           const antes = dto.id ? await tx.productoDotacion.findUnique({ where: { id: dto.id }, include: { tallas: true } }) : null;
-          if (dto.id && !antes) throw new NotFoundException('El producto no existe.');
+          if (dto.id && (!antes || antes.eliminadoEn)) throw new NotFoundException('El producto no existe.');
           const usaTallas = dto.usaTallas ?? antes?.usaTallas ?? false;
           // El stock nunca se edita aquí: solo cambia con ingresos y entregas.
           const data = { nombre, categoriaId: dto.categoriaId, usaTallas, ...(dto.activo === undefined ? {} : { activo: dto.activo }) };
@@ -171,15 +178,19 @@ export class DotacionesService {
     }
   }
 
-  /** Se borra con su historial de ingresos. Lo que ya está en un plan o en una entrega no se puede borrar: se desactiva. */
+  /**
+   * Deja de listarse y sale de los planes y de las entregas que aún no se hacen. Sus movimientos y las entregas ya cerradas se conservan.
+   * Un plan que se queda sin productos se desactiva, y una entrega pendiente que se queda sin productos se descarta.
+   */
   async eliminarProducto(id: string) {
     await this.prisma.$transaction(async (tx) => {
-      const producto = await tx.productoDotacion.findUnique({ where: { id }, include: { _count: { select: { itemsPlan: true, itemsEntrega: true } } } });
-      if (!producto) throw new NotFoundException('El producto no existe.');
-      if (producto._count.itemsEntrega) throw new BadRequestException('El producto está en entregas y no se puede eliminar para no perder ese historial. Desactívalo desde «Editar».');
-      if (producto._count.itemsPlan) throw new BadRequestException('El producto está en un plan: quítalo del plan (o elimina el plan) y vuelve a intentarlo.');
-      await tx.movimientoDotacion.deleteMany({ where: { productoId: id } });
-      await tx.productoDotacion.delete({ where: { id } });
+      const producto = await tx.productoDotacion.findUnique({ where: { id } });
+      if (!producto || producto.eliminadoEn) throw new NotFoundException('El producto no existe.');
+      await tx.entregaDotacionItem.deleteMany({ where: { productoId: id, entrega: { estado: 'PENDIENTE' } } });
+      await tx.entregaDotacion.deleteMany({ where: { estado: 'PENDIENTE', items: { none: {} } } });
+      await tx.planDotacionItem.deleteMany({ where: { productoId: id } });
+      await tx.planDotacion.updateMany({ where: { eliminadoEn: null, items: { none: {} } }, data: { activo: false } });
+      await tx.productoDotacion.update({ where: { id }, data: { eliminadoEn: new Date(), activo: false, nombre: nombreEliminado(producto.nombre, id) } });
     });
     return { id };
   }
@@ -187,7 +198,7 @@ export class DotacionesService {
   async registrarIngreso(dto: IngresoStockDto, user: any) {
     return this.prisma.$transaction(async (tx) => {
       const producto = await tx.productoDotacion.findUnique({ where: { id: dto.productoId }, include: { tallas: true } });
-      if (!producto) throw new NotFoundException('El producto no existe.');
+      if (!producto || producto.eliminadoEn) throw new NotFoundException('El producto no existe.');
       const talla = producto.usaTallas ? producto.tallas.find((t) => t.nombre === dto.talla?.trim()) : undefined;
       if (producto.usaTallas && !talla) throw new BadRequestException('Elige la talla que ingresa.');
       if (talla) await tx.tallaDotacion.update({ where: { id: talla.id }, data: { stock: { increment: dto.cantidad } } });
@@ -231,7 +242,7 @@ export class DotacionesService {
   }
 
   async listarPlanes() {
-    const planes = await this.prisma.planDotacion.findMany({ orderBy: [{ activo: 'desc' }, { createdAt: 'desc' }], include: INCLUIR_PLAN });
+    const planes = await this.prisma.planDotacion.findMany({ where: { eliminadoEn: null }, orderBy: [{ activo: 'desc' }, { createdAt: 'desc' }], include: INCLUIR_PLAN });
     return planes.map((p) => this.presentarPlan(p));
   }
 
@@ -280,7 +291,7 @@ export class DotacionesService {
     const plan = await this.prisma.$transaction(async (tx) => {
       if (dto.id) {
         const existe = await tx.planDotacion.findUnique({ where: { id: dto.id } });
-        if (!existe) throw new NotFoundException('El plan no existe.');
+        if (!existe || existe.eliminadoEn) throw new NotFoundException('El plan no existe.');
         // Las entregas ya creadas no cambian: el plan editado rige para las que se creen o programen después.
         await tx.planDotacionItem.deleteMany({ where: { planId: dto.id } });
         return tx.planDotacion.update({ where: { id: dto.id }, data: { ...data, items: { create: items } }, include: INCLUIR_PLAN });
@@ -292,21 +303,18 @@ export class DotacionesService {
 
   async estadoPlan(dto: EstadoPlanDto) {
     const existe = await this.prisma.planDotacion.findUnique({ where: { id: dto.id } });
-    if (!existe) throw new NotFoundException('El plan no existe.');
+    if (!existe || existe.eliminadoEn) throw new NotFoundException('El plan no existe.');
     await this.prisma.planDotacion.update({ where: { id: dto.id }, data: { activo: dto.activo } });
     return { id: dto.id, activo: dto.activo };
   }
 
-  /** Se borra junto con sus entregas pendientes u omitidas. Con entregas realizadas (firma, fotos, stock descontado) solo se desactiva. */
+  /** Deja de listarse y se descartan sus entregas pendientes. Las entregas realizadas y omitidas se conservan como historial. */
   async eliminarPlan(id: string) {
     await this.prisma.$transaction(async (tx) => {
-      if (!(await tx.planDotacion.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException('El plan no existe.');
-      await tx.entregaDotacion.deleteMany({ where: { planId: id, estado: { not: 'ENTREGADA' } } });
-      // Si queda alguna, es una entrega realizada: al lanzar el error la transacción no borra nada.
-      if (await tx.entregaDotacion.count({ where: { planId: id } })) {
-        throw new BadRequestException('El plan ya tiene entregas realizadas y no se puede eliminar para no perder ese historial. Desactívalo.');
-      }
-      await tx.planDotacion.delete({ where: { id } });
+      const plan = await tx.planDotacion.findUnique({ where: { id }, select: { eliminadoEn: true } });
+      if (!plan || plan.eliminadoEn) throw new NotFoundException('El plan no existe.');
+      await tx.entregaDotacion.deleteMany({ where: { planId: id, estado: 'PENDIENTE' } });
+      await tx.planDotacion.update({ where: { id }, data: { eliminadoEn: new Date(), activo: false } });
     });
     return { id };
   }

@@ -188,31 +188,43 @@ describe('dotaciones: crear, registrar y repetir entregas (base real)', () => {
     expect(await env.prisma.entregaDotacion.count({ where: { planId: ids.plan, claveDestino: ids.lav2, estado: 'PENDIENTE' } })).toBe(0);
   });
 
-  it('no elimina lo que tiene historial', async () => {
-    const producto = await env.prisma.productoDotacion.findUniqueOrThrow({ where: { id: ids.producto } });
-    await expect(service.eliminarPlan(ids.plan)).rejects.toThrow(/entregas realizadas/);
-    // El intento fallido no borra las pendientes ni las omitidas.
-    expect(await env.prisma.entregaDotacion.count({ where: { planId: ids.plan, estado: { not: 'ENTREGADA' } } })).toBeGreaterThan(0);
-    await expect(service.eliminarProducto(ids.producto)).rejects.toThrow(/en entregas/);
-    await expect(service.eliminarCategoria(producto.categoriaId)).rejects.toThrow(/tiene productos/);
-  });
-
-  it('elimina un plan sin entregas realizadas, y luego su producto y su categoría', async () => {
+  it('eliminar un plan conserva lo entregado y lo omitido, y descarta solo lo pendiente', async () => {
     const categoria = await env.prisma.categoriaDotacion.create({ data: { nombre: `${env.marca}-cat-borrar` } });
     env.rastrear('CategoriaDotacion', categoria.id);
     const producto = await service.guardarProducto({ nombre: `${env.marca}-guantes`, categoriaId: categoria.id });
     env.rastrear('ProductoDotacion', producto.id);
-    await service.registrarIngreso({ productoId: producto.id, cantidad: 3 }, gestor);
-    const plan = await service.guardarPlan({ ...planBase('borrar'), items: [{ productoId: producto.id, cantidad: 1 }] }, { id: ids.coord });
-    env.rastrear('PlanDotacion', plan.id);
-    await service.crearEntregas({ planId: plan.id, modo: 'PERSONAS', destinos: [ids.lav1], coordinadorId: ids.coord, fecha: hoy });
-    await expect(service.eliminarProducto(producto.id)).rejects.toBeInstanceOf(BadRequestException);
+    const cerradasAntes = await env.prisma.entregaDotacion.count({ where: { planId: ids.plan, estado: { not: 'PENDIENTE' } } });
+    expect(cerradasAntes).toBeGreaterThan(0);
+    await expect(service.eliminarCategoria(categoria.id)).rejects.toThrow(/tiene productos/);
 
-    await service.eliminarPlan(plan.id);
+    await service.eliminarPlan(ids.plan);
+    expect((await service.listarPlanes()).some((p) => p.id === ids.plan)).toBe(false);
+    expect(await env.prisma.entregaDotacion.count({ where: { planId: ids.plan, estado: 'PENDIENTE' } })).toBe(0);
+    expect(await env.prisma.entregaDotacion.count({ where: { planId: ids.plan } })).toBe(cerradasAntes);
+    const historial = await service.listarEntregas({ planId: ids.plan }, gestor);
+    expect(historial).toHaveLength(cerradasAntes);
+    await expect(service.estadoPlan({ id: ids.plan, activo: true })).rejects.toThrow(/no existe/);
+  });
+
+  it('eliminar un producto con historial lo saca de las listas y planes, conserva sus movimientos y libera el nombre', async () => {
+    const original = await env.prisma.productoDotacion.findUniqueOrThrow({ where: { id: ids.producto } });
+    const movimientos = await env.prisma.movimientoDotacion.count({ where: { productoId: ids.producto } });
+    const plan = await crearPlan('con-producto');
+    await service.crearEntregas({ planId: plan.id, modo: 'PERSONAS', destinos: [ids.lav1], coordinadorId: ids.coord, fecha: hoy });
+
+    await service.eliminarProducto(ids.producto);
+    expect((await service.listarProductos()).some((p) => p.id === ids.producto)).toBe(false);
+    expect(await env.prisma.movimientoDotacion.count({ where: { productoId: ids.producto } })).toBe(movimientos);
+    expect(await env.prisma.entregaDotacionItem.count({ where: { productoId: ids.producto, entrega: { estado: 'ENTREGADA' } } })).toBeGreaterThan(0);
     expect(await env.prisma.entregaDotacion.count({ where: { planId: plan.id } })).toBe(0);
-    await service.eliminarProducto(producto.id);
-    await service.eliminarCategoria(categoria.id);
-    expect(await env.prisma.categoriaDotacion.findUnique({ where: { id: categoria.id } })).toBeNull();
+    expect((await service.listarPlanes()).find((p) => p.id === plan.id)).toMatchObject({ activo: false, items: [] });
+    await expect(service.registrarIngreso({ productoId: ids.producto, cantidad: 1, talla: 'M' }, gestor)).rejects.toThrow(/no existe/);
+
+    const otro = await service.guardarProducto({ nombre: original.nombre, categoriaId: original.categoriaId });
+    env.rastrear('ProductoDotacion', otro.id);
+    await service.eliminarProducto(otro.id);
+    await service.eliminarCategoria(original.categoriaId);
+    expect((await service.listarCategorias()).some((c) => c.id === original.categoriaId)).toBe(false);
   });
 
   it('el listado de coordinadores trae a quienes tienen el permiso de entregar', async () => {

@@ -1585,7 +1585,7 @@ export class ReportesService {
   }
 
   private async dotacionesStock(_ctx: Ctx): Promise<Bruta[]> {
-    const productos = await this.prisma.productoDotacion.findMany({ include: { categoria: { select: { nombre: true } }, tallas: { orderBy: { orden: 'asc' } } }, orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }] });
+    const productos = await this.prisma.productoDotacion.findMany({ where: { eliminadoEn: null }, include: { categoria: { select: { nombre: true } }, tallas: { orderBy: { orden: 'asc' } } }, orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }] });
     // Un producto con tallas sale con una fila por talla.
     return productos.flatMap((p) => {
       const filas = p.usaTallas && p.tallas.length ? p.tallas.map((t) => ({ nombre: `${p.nombre} · talla ${t.nombre}`, stock: t.stock })) : [{ nombre: p.nombre, stock: p.stock }];
