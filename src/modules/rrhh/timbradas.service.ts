@@ -117,9 +117,9 @@ export class TimbradasService {
       this.prisma.timbrada.findMany({ where: { userId: String(user.id), fechaDia: diaComoFecha(f.dia) }, orderBy: { marcadaEn: 'asc' } }),
       this.horarios.resumenHoy(String(user.id), ahora),
     ]);
-    // Qué marca correspondería ahora según el horario: null si hoy es día libre o está fuera de las ventanas.
+    // Qué marca correspondería ahora: null si hoy es día libre o si esa marca ya se registró.
     const yaMarcado = { entrada: marcas.some((m) => m.tipo === 'ENTRADA'), salida: marcas.some((m) => m.tipo === 'SALIDA') };
-    const siguiente = obligatoria ? resolverMarca(hoy.horario, hoy.ajuste, f.hora * 60 + f.minuto, yaMarcado) : resolverMarcaVoluntaria(yaMarcado);
+    const siguiente = obligatoria ? resolverMarca(hoy.horario, f.hora * 60 + f.minuto, yaMarcado) : resolverMarcaVoluntaria(yaMarcado);
     // Sin una agencia o bodega con ubicación contra la cual validar tampoco se puede timbrar.
     const sinRef = sinReferencia(sitios, modo);
     return {
@@ -150,14 +150,14 @@ export class TimbradasService {
     const f = fechaEnEcuador(ahora);
     const fechaDia = diaComoFecha(f.dia);
 
-    // Entrada o Salida lo decide el horario: la hora del horario a la que cae más cerca, dentro de la ventana. Fuera de ella no se deja timbrar.
+    // Entrada o Salida lo decide la hora: antes del mediodía es Entrada y desde el mediodía, Salida. El horario solo dice si fue a tiempo.
     const [contexto, previas] = await Promise.all([
       this.horarios.contextoDe(userId, f.dia),
       this.prisma.timbrada.findMany({ where: { userId, fechaDia }, select: { tipo: true } }),
     ]);
     const ya = { entrada: previas.some((m) => m.tipo === 'ENTRADA'), salida: previas.some((m) => m.tipo === 'SALIDA') };
     const obligatoria = this.esObligatoria(user);
-    const resolucion = obligatoria ? resolverMarca(contexto.dia, contexto.ajuste, f.hora * 60 + f.minuto, ya) : resolverMarcaVoluntaria(ya);
+    const resolucion = obligatoria ? resolverMarca(contexto.dia, f.hora * 60 + f.minuto, ya) : resolverMarcaVoluntaria(ya);
     if (!resolucion.ok) {
       const Excepcion = resolucion.motivo === 'YA_REGISTRADA' ? ConflictException : BadRequestException;
       throw new Excepcion({ message: resolucion.mensaje, codigo: resolucion.motivo });

@@ -17,6 +17,8 @@ import {
   sumarDias,
   validarAjuste,
   validarSemana,
+  problemaDeMediodia,
+  MEDIODIA_MIN,
   versionVigente,
   ventanasDe,
   type AjusteHorario,
@@ -78,7 +80,7 @@ export class HorariosService {
   async resumenHoy(userId: string, ahora = new Date()) {
     const h = this.hoy(ahora);
     const { dia: d, ajuste } = await this.contextoDe(userId, h.dia);
-    return { dia: h.dia, horario: d, ajuste, ventanas: d.trabaja ? ventanasDe(d, ajuste) : null };
+    return { dia: h.dia, horario: d, ajuste, ventanas: d.trabaja ? ventanasDe() : null };
   }
 
   // ───────────────────────── Evaluación ─────────────────────────
@@ -285,6 +287,8 @@ export class HorariosService {
     const motivo = (dto.motivo ?? '').trim();
     if (motivo.length < 5) throw new BadRequestException('Escribe el motivo (mínimo 5 caracteres).');
     if (aMinutos(dto.entrada) >= aMinutos(dto.salida)) throw new BadRequestException('La salida debe ser posterior a la entrada (no se admiten turnos que cruzan la medianoche).');
+    const fueraDeSuMitad = problemaDeMediodia(dto.entrada, dto.salida);
+    if (fueraDeSuMitad) throw new BadRequestException(`Revisa el horario: ${fueraDeSuMitad}`);
     const hoy = this.hoy().dia;
     const manana = sumarDias(hoy, 1);
     const limite = sumarDias(hoy, FINES_DE_SEMANA_MAX_DIAS_ADELANTE);
@@ -403,14 +407,14 @@ export class HorariosService {
       const d: DiaHorario = extra ? { trabaja: true, entrada: extra.entrada, salida: extra.salida } : semanaDe(versionVigente((versiones as VersionHorario[]).filter((v) => v.userId === p.id), h.dia), h.dia)[indiceDiaSemana(h.dia)];
       if (!d.trabaja) continue;
       const tipos = porPersona.get(p.id) ?? new Set<string>();
-      if (tipos.size === 0 && h.minuto > aMinutos(d.entrada) + ajuste.ventanaMin) {
+      if (tipos.size === 0 && h.minuto >= MEDIODIA_MIN) {
         if (await this.avisar(p, h.dia, 'SIN_MARCA', 'Día sin marcas',
-          `No registraste ninguna marca hoy (${h.dia}): la ventana para marcar tu entrada ya terminó.`,
-          `{nombre} no registró ninguna marca hoy (${h.dia}) y la ventana de entrada ya terminó.`)) avisadas++;
+          `No registraste ninguna marca hoy (${h.dia}) y ya pasó el mediodía, así que ya no se puede registrar la entrada.`,
+          `{nombre} no registró ninguna marca hoy (${h.dia}) y ya pasó el mediodía.`)) avisadas++;
       } else if (tipos.has('ENTRADA') && !tipos.has('SALIDA') && h.minuto > aMinutos(d.salida) + ajuste.ventanaMin) {
         if (await this.avisar(p, h.dia, 'ENTRADA_SIN_SALIDA', 'Entrada sin salida',
-          `Marcaste tu entrada hoy (${h.dia}) pero no tu salida, y la ventana para marcarla ya terminó. El día queda incompleto.`,
-          `{nombre} marcó su entrada hoy (${h.dia}) pero no su salida, y la ventana ya terminó. El día queda incompleto.`)) avisadas++;
+          `Marcaste tu entrada hoy (${h.dia}) pero todavía no tu salida. Puedes registrarla hasta las 23:59.`,
+          `{nombre} marcó su entrada hoy (${h.dia}) pero todavía no su salida.`)) avisadas++;
       }
     }
     return avisadas;

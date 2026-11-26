@@ -10,6 +10,8 @@ import {
   horarioPorDefectoDe,
   indiceDiaSemana,
   resolverMarca,
+  puntualidadDe,
+  problemaDeMediodia,
   resolverMarcaVoluntaria,
   sumarDias,
   validarAjuste,
@@ -93,48 +95,37 @@ describe('fechas y versiones', () => {
   });
 });
 
-describe('resolverMarca: entrada o salida por cercanía al horario', () => {
-  it('con 08:00 a 15:00 y ventana de 2 h: entrada de 06:00 a 10:00, salida de 13:00 a 17:00', () => {
-    expect(ventanasDe(DIA, AJUSTE_POR_DEFECTO)).toEqual({ entrada: { desde: '06:00', hasta: '10:00' }, salida: { desde: '13:00', hasta: '17:00' } });
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('06:00'), NADA)).toEqual({ ok: true, tipo: 'ENTRADA' });
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('10:00'), NADA)).toEqual({ ok: true, tipo: 'ENTRADA' });
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('13:00'), { entrada: true, salida: false })).toEqual({ ok: true, tipo: 'SALIDA' });
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('17:00'), { entrada: true, salida: false })).toEqual({ ok: true, tipo: 'SALIDA' });
-  });
-
-  it('fuera de las ventanas no se deja timbrar y el mensaje dice cuáles son', () => {
-    const r = resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('11:30'), NADA);
-    expect(r).toMatchObject({ ok: false, motivo: 'FUERA_DE_VENTANA' });
-    expect((r as any).mensaje).toContain('06:00 a 10:00');
-    expect((r as any).mensaje).toContain('13:00 a 17:00');
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('17:01'), NADA)).toMatchObject({ ok: false, motivo: 'FUERA_DE_VENTANA' });
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('05:59'), NADA)).toMatchObject({ ok: false, motivo: 'FUERA_DE_VENTANA' });
+describe('resolverMarca: entrada en la mañana y salida en la tarde', () => {
+  it('de 00:00 a 11:59 es entrada y de 12:00 a 23:59 es salida, a cualquier hora', () => {
+    for (const hora of ['00:00', '05:00', '08:10', '11:59']) expect(resolverMarca(DIA, h(hora), NADA)).toEqual({ ok: true, tipo: 'ENTRADA' });
+    for (const hora of ['12:00', '15:00', '20:30', '23:59']) expect(resolverMarca(DIA, h(hora), NADA)).toEqual({ ok: true, tipo: 'SALIDA' });
+    expect(ventanasDe()).toEqual({ entrada: { desde: '00:00', hasta: '11:59' }, salida: { desde: '12:00', hasta: '23:59' } });
   });
 
   it('un día libre no se puede timbrar', () => {
-    expect(resolverMarca({ ...DIA, trabaja: false }, AJUSTE_POR_DEFECTO, h('08:00'), NADA)).toMatchObject({ ok: false, motivo: 'DIA_LIBRE' });
+    expect(resolverMarca({ ...DIA, trabaja: false }, h('08:00'), NADA)).toMatchObject({ ok: false, motivo: 'DIA_LIBRE' });
   });
 
   it('una sola entrada y una sola salida por día', () => {
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('08:05'), { entrada: true, salida: false })).toMatchObject({ ok: false, motivo: 'YA_REGISTRADA', mensaje: 'Ya registraste tu entrada de hoy.' });
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('15:05'), { entrada: true, salida: true })).toMatchObject({ ok: false, motivo: 'YA_REGISTRADA', mensaje: 'Ya registraste tu salida de hoy.' });
+    expect(resolverMarca(DIA, h('10:00'), { entrada: true, salida: false })).toMatchObject({ ok: false, motivo: 'YA_REGISTRADA', mensaje: expect.stringContaining('desde las 12:00') });
+    expect(resolverMarca(DIA, h('15:05'), { entrada: true, salida: true })).toMatchObject({ ok: false, motivo: 'YA_REGISTRADA', mensaje: 'Ya registraste tu salida de hoy.' });
   });
 
-  it('se acepta una salida aunque no haya entrada', () => {
-    expect(resolverMarca(DIA, AJUSTE_POR_DEFECTO, h('15:00'), NADA)).toEqual({ ok: true, tipo: 'SALIDA' });
+  it('los 10 minutos de gracia: con 08:00, a las 08:10 está a tiempo y a las 08:11 atrasado; igual antes y en la salida', () => {
+    expect(puntualidadDe(h('08:10'), h('08:00'), 10)).toBe('A_TIEMPO');
+    expect(puntualidadDe(h('08:11'), h('08:00'), 10)).toBe('ATRASADO');
+    expect(puntualidadDe(h('07:50'), h('08:00'), 10)).toBe('A_TIEMPO');
+    expect(puntualidadDe(h('07:49'), h('08:00'), 10)).toBe('MUY_ANTES');
+    expect(puntualidadDe(h('16:50'), h('17:00'), 10)).toBe('A_TIEMPO');
+    expect(puntualidadDe(h('16:49'), h('17:00'), 10)).toBe('MUY_ANTES');
+    expect(puntualidadDe(h('17:10'), h('17:00'), 10)).toBe('A_TIEMPO');
+    expect(puntualidadDe(h('17:11'), h('17:00'), 10)).toBe('ATRASADO');
   });
 
-  it('con ventanas que se solapan gana la hora más cercana y, tras la entrada, solo cabe la salida', () => {
-    const corto: DiaHorario = { trabaja: true, entrada: '08:00', salida: '10:00' };
-    expect(resolverMarca(corto, AJUSTE_POR_DEFECTO, h('08:50'), NADA)).toEqual({ ok: true, tipo: 'ENTRADA' });
-    expect(resolverMarca(corto, AJUSTE_POR_DEFECTO, h('09:10'), NADA)).toEqual({ ok: true, tipo: 'SALIDA' });
-    expect(resolverMarca(corto, AJUSTE_POR_DEFECTO, h('08:50'), { entrada: true, salida: false })).toEqual({ ok: true, tipo: 'SALIDA' });
-  });
-
-  it('con ventana 0 solo vale el minuto exacto', () => {
-    const exacta = { toleranciaMin: 5, ventanaMin: 0 };
-    expect(resolverMarca(DIA, exacta, h('08:00'), NADA)).toEqual({ ok: true, tipo: 'ENTRADA' });
-    expect(resolverMarca(DIA, exacta, h('08:01'), NADA)).toMatchObject({ ok: false });
+  it('no se puede guardar un horario que no se podría marcar', () => {
+    expect(problemaDeMediodia('13:00', '18:00')).toContain('antes de las 12:00');
+    expect(problemaDeMediodia('08:00', '11:30')).toContain('desde las 12:00');
+    expect(problemaDeMediodia('08:00', '17:00')).toBeNull();
   });
 });
 
@@ -179,11 +170,19 @@ describe('evaluarDia', () => {
     expect(ev(null, '15:00')).toMatchObject({ estado: 'INCOMPLETO', horasReales: null, salidaReal: '15:00' });
   });
 
+  it('el atraso cuenta aunque falte la salida', () => {
+    expect(ev('08:30', null)).toMatchObject({ estado: 'INCOMPLETO', observaciones: ['ATRASO'], puntualidadEntrada: 'ATRASADO', puntualidadSalida: null });
+    expect(ev('08:30', null, { ahoraMin: h('09:00') })).toMatchObject({ estado: 'EN_CURSO', puntualidadEntrada: 'ATRASADO' });
+    expect(ev('08:00', '15:00')).toMatchObject({ puntualidadEntrada: 'A_TIEMPO', puntualidadSalida: 'A_TIEMPO' });
+  });
+
   it('hoy no se da por faltante lo que todavía puede marcarse', () => {
     expect(ev(null, null, { ahoraMin: h('09:30') }).estado).toBe('PENDIENTE');
-    expect(ev(null, null, { ahoraMin: h('10:01') }).estado).toBe('SIN_MARCA');
+    expect(ev(null, null, { ahoraMin: h('11:59') }).estado).toBe('PENDIENTE');
+    expect(ev(null, null, { ahoraMin: h('12:00') }).estado).toBe('SIN_MARCA');
     expect(ev('08:00', null, { ahoraMin: h('12:00') }).estado).toBe('EN_CURSO');
-    expect(ev('08:00', null, { ahoraMin: h('17:01') }).estado).toBe('INCOMPLETO');
+    expect(ev('08:00', null, { ahoraMin: h('23:30') }).estado).toBe('EN_CURSO'); // la salida se puede marcar hasta el final del día
+    expect(ev('08:00', null).estado).toBe('INCOMPLETO'); // ya pasó el día
   });
 
   it('día libre y días sin horario no se evalúan', () => {

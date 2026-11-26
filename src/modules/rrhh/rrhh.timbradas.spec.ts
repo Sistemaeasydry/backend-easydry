@@ -236,7 +236,7 @@ describe('TimbradasService (base real)', () => {
     const conUbicacion = await service.estado(actores.lavador);
     // el lavador ya marcó su entrada y su salida: hoy no le queda otra marca
     expect(conUbicacion).toMatchObject({ dia: '2031-03-10', tipoActual: null, puedeTimbrar: false, exigeUbicacion: true, precisionMaxM: 120, toleranciaMin: 10, ventanaMin: 120, horario: { trabaja: true, entrada: '08:00', salida: '17:00' } });
-    expect(conUbicacion.ventanas).toEqual({ entrada: { desde: '06:00', hasta: '10:00' }, salida: { desde: '15:00', hasta: '19:00' } });
+    expect(conUbicacion.ventanas).toEqual({ entrada: { desde: '00:00', hasta: '11:59' }, salida: { desde: '12:00', hasta: '23:59' } });
     expect(await service.estado(actores.lavador2)).toMatchObject({ tipoActual: 'SALIDA', puedeTimbrar: true });
     expect(conUbicacion.marcasHoy.map((m) => m.tipo)).toEqual(['ENTRADA', 'SALIDA']);
     expect(conUbicacion.sitios).toEqual([{ tipo: 'AGENCIA', nombre: agencia.nombre, radioM: 100, tieneUbicacion: true }]);
@@ -283,13 +283,18 @@ describe('TimbradasService (base real)', () => {
     expect(new Set(soloUno.filas.map((f) => f.userId))).toEqual(new Set([ids.lavador]));
   });
 
-  it('fuera de las ventanas del horario no se deja timbrar y el mensaje dice cuáles son', async () => {
-    a(new Date('2031-03-10T16:30:00Z')); // 11:30
-    await expect(marcar('lider')).rejects.toMatchObject({ response: { codigo: 'FUERA_DE_VENTANA', message: expect.stringContaining('06:00 a 10:00') } });
-    a(new Date('2031-03-11T00:30:00Z')); // 19:30: pasó la ventana de la salida
-    await expect(marcar('lider')).rejects.toMatchObject({ response: { codigo: 'FUERA_DE_VENTANA' } });
-    expect(await env.prisma.timbrada.count({ where: { userId: ids.lider } })).toBe(0);
-    expect(await service.estado(actores.lider)).toMatchObject({ puedeTimbrar: false, tipoActual: null });
+  it('se timbra a cualquier hora: antes del mediodía es entrada y desde el mediodía, salida', async () => {
+    try {
+      a(new Date('2031-03-10T16:30:00Z')); // 11:30, lejos de las 08:00 de su horario
+      expect(await marcar('lider')).toMatchObject({ tipo: 'ENTRADA' });
+      await expect(marcar('lider')).rejects.toMatchObject({ response: { codigo: 'YA_REGISTRADA' } });
+      a(new Date('2031-03-11T00:30:00Z')); // 19:30
+      expect(await marcar('lider')).toMatchObject({ tipo: 'SALIDA' });
+      const r = await service.mias({ desde: '2031-03-10', hasta: '2031-03-10' }, actores.lider);
+      expect(r.evaluacion).toEqual([expect.objectContaining({ puntualidadEntrada: 'ATRASADO', puntualidadSalida: 'ATRASADO' })]);
+    } finally {
+      await env.prisma.timbrada.deleteMany({ where: { userId: ids.lider } });
+    }
   });
 
   it('un día desactivado en el horario no se puede timbrar', async () => {
@@ -301,20 +306,6 @@ describe('TimbradasService (base real)', () => {
       expect(await service.estado(actores.lider)).toMatchObject({ puedeTimbrar: false, horario: { trabaja: false } });
     } finally {
       await env.prisma.horarioPersona.delete({ where: { id: version.id } });
-    }
-  });
-
-  it('un horario propio cambia la ventana: con entrada a las 14:00 la marca de las 08:30 ya no vale', async () => {
-    const dias = Array.from({ length: 7 }, () => ({ trabaja: true, entrada: '14:00', salida: '22:00' }));
-    const version = await env.prisma.horarioPersona.create({ data: { userId: ids.lider, vigenteDesde: new Date('2031-03-01T00:00:00Z'), dias, motivo: 'turno de tarde', actorId: ids.admin } });
-    try {
-      a(OCHO_Y_MEDIA);
-      await expect(marcar('lider')).rejects.toMatchObject({ response: { codigo: 'FUERA_DE_VENTANA' } });
-      a(new Date('2031-03-10T19:15:00Z')); // 14:15
-      expect(await marcar('lider')).toMatchObject({ tipo: 'ENTRADA', verificacion: 'VERIFICADA' });
-    } finally {
-      await env.prisma.horarioPersona.delete({ where: { id: version.id } });
-      await env.prisma.timbrada.deleteMany({ where: { userId: ids.lider } });
     }
   });
 

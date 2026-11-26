@@ -56,6 +56,16 @@ export const aHHMM = (minutos: number): string => {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
 
+/** Antes de este minuto una marca es la Entrada; desde él, la Salida. */
+export const MEDIODIA_MIN = 12 * 60;
+
+/** Un horario tiene que poder marcarse: la entrada antes del mediodía y la salida desde el mediodía. */
+export function problemaDeMediodia(entrada: string, salida: string): string | null {
+  if (aMinutos(entrada) >= MEDIODIA_MIN) return 'la entrada debe ser antes de las 12:00 (desde el mediodía las marcas cuentan como salida).';
+  if (aMinutos(salida) < MEDIODIA_MIN) return 'la salida debe ser desde las 12:00 (antes del mediodía las marcas cuentan como entrada).';
+  return null;
+}
+
 /** Valida una semana de horario; devuelve el mensaje del primer problema o null si está bien. */
 export function validarSemana(semana: unknown): string | null {
   if (!Array.isArray(semana) || semana.length !== DIAS_SEMANA) return 'El horario debe traer los 7 días de la semana (lunes a domingo).';
@@ -64,6 +74,8 @@ export function validarSemana(semana: unknown): string | null {
     if (!d || typeof d.trabaja !== 'boolean' || typeof d.entrada !== 'string' || typeof d.salida !== 'string') return `El ${NOMBRES_DIA[i]} no tiene un horario válido.`;
     if (!HHMM.test(d.entrada) || !HHMM.test(d.salida)) return `El ${NOMBRES_DIA[i]} debe tener horas en formato HH:mm.`;
     if (d.trabaja && aMinutos(d.entrada) >= aMinutos(d.salida)) return `El ${NOMBRES_DIA[i]}: la salida debe ser posterior a la entrada (no se admiten turnos que cruzan la medianoche).`;
+    const fueraDeSuMitad = d.trabaja ? problemaDeMediodia(d.entrada, d.salida) : null;
+    if (fueraDeSuMitad) return `El ${NOMBRES_DIA[i]}: ${fueraDeSuMitad}`;
   }
   return null;
 }
@@ -134,14 +146,9 @@ export interface Ventanas {
   salida: { desde: string; hasta: string };
 }
 
-export function ventanasDe(dia: DiaHorario, ajuste: AjusteHorario): Ventanas {
-  const e = aMinutos(dia.entrada);
-  const s = aMinutos(dia.salida);
-  const v = ajuste.ventanaMin;
-  return {
-    entrada: { desde: aHHMM(Math.max(0, e - v)), hasta: aHHMM(Math.min(1439, e + v)) },
-    salida: { desde: aHHMM(Math.max(0, s - v)), hasta: aHHMM(Math.min(1439, s + v)) },
-  };
+/** Franjas en las que cada marca se registra: la mañana es Entrada y la tarde, Salida. */
+export function ventanasDe(): Ventanas {
+  return { entrada: { desde: '00:00', hasta: '11:59' }, salida: { desde: '12:00', hasta: '23:59' } };
 }
 
 /**
@@ -156,35 +163,31 @@ export function resolverMarcaVoluntaria(ya: { entrada: boolean; salida: boolean 
 
 export type ResultadoMarca =
   | { ok: true; tipo: TipoMarca }
-  | { ok: false; motivo: 'DIA_LIBRE' | 'FUERA_DE_VENTANA' | 'YA_REGISTRADA'; mensaje: string };
+  | { ok: false; motivo: 'DIA_LIBRE' | 'YA_REGISTRADA'; mensaje: string };
 
 /**
- * Decide si una marca es Entrada o Salida según la hora del horario a la que cae más cerca, dentro de la ventana. Si las ventanas
- * se solapan gana la hora más cercana; tras una entrada solo cabe una salida y nunca hay más de una de cada tipo por día.
+ * Decide si una marca es Entrada o Salida por la hora: de 00:00 a 11:59 es Entrada y de 12:00 a 23:59 es Salida. Se puede timbrar a
+ * cualquier hora de un día de trabajo; la puntualidad se evalúa aparte. Nunca hay más de una marca de cada tipo por día.
  */
-export function resolverMarca(dia: DiaHorario, ajuste: AjusteHorario, minutoActual: number, ya: { entrada: boolean; salida: boolean }): ResultadoMarca {
+export function resolverMarca(dia: DiaHorario, minutoActual: number, ya: { entrada: boolean; salida: boolean }): ResultadoMarca {
   if (!dia.trabaja) return { ok: false, motivo: 'DIA_LIBRE', mensaje: 'Hoy no es un día de trabajo en tu horario, así que no se puede timbrar.' };
-  const e = aMinutos(dia.entrada);
-  const s = aMinutos(dia.salida);
-  const v = ajuste.ventanaMin;
-  const candidatos: Array<{ tipo: TipoMarca; distancia: number }> = [];
-  if (Math.abs(minutoActual - e) <= v) candidatos.push({ tipo: 'ENTRADA', distancia: Math.abs(minutoActual - e) });
-  if (Math.abs(minutoActual - s) <= v) candidatos.push({ tipo: 'SALIDA', distancia: Math.abs(minutoActual - s) });
-
-  if (candidatos.length === 0) {
-    const w = ventanasDe(dia, ajuste);
+  const tipo: TipoMarca = minutoActual < MEDIODIA_MIN ? 'ENTRADA' : 'SALIDA';
+  if (tipo === 'ENTRADA' ? ya.entrada : ya.salida) {
     return {
       ok: false,
-      motivo: 'FUERA_DE_VENTANA',
-      mensaje: `Fuera del horario para timbrar. La entrada se marca de ${w.entrada.desde} a ${w.entrada.hasta} y la salida de ${w.salida.desde} a ${w.salida.hasta}.`,
+      motivo: 'YA_REGISTRADA',
+      mensaje: tipo === 'ENTRADA' ? 'Ya registraste tu entrada de hoy. La salida se marca desde las 12:00.' : 'Ya registraste tu salida de hoy.',
     };
   }
-  const libres = candidatos.filter((c) => (c.tipo === 'ENTRADA' ? !ya.entrada : !ya.salida)).sort((a, b) => a.distancia - b.distancia);
-  if (libres.length === 0) {
-    const tipo = candidatos.sort((a, b) => a.distancia - b.distancia)[0].tipo;
-    return { ok: false, motivo: 'YA_REGISTRADA', mensaje: tipo === 'ENTRADA' ? 'Ya registraste tu entrada de hoy.' : 'Ya registraste tu salida de hoy.' };
-  }
-  return { ok: true, tipo: libres[0].tipo };
+  return { ok: true, tipo };
+}
+
+/** Cómo quedó una marca frente a la hora del horario, con los minutos de gracia hacia los dos lados. */
+export type Puntualidad = 'A_TIEMPO' | 'MUY_ANTES' | 'ATRASADO';
+
+export function puntualidadDe(minutoMarca: number, minutoHorario: number, toleranciaMin: number): Puntualidad {
+  if (minutoMarca < minutoHorario - toleranciaMin) return 'MUY_ANTES';
+  return minutoMarca > minutoHorario + toleranciaMin ? 'ATRASADO' : 'A_TIEMPO';
 }
 
 // ───────────────────────── Evaluación del día ─────────────────────────
@@ -211,6 +214,9 @@ export interface EvaluacionDia {
   horario: { entrada: string; salida: string } | null;
   entradaReal: string | null;
   salidaReal: string | null;
+  /** Estado de cada marca frente al horario; null si no hay marca o ese día no se juzga (libre, sin horario, timbrada voluntaria). */
+  puntualidadEntrada: Puntualidad | null;
+  puntualidadSalida: Puntualidad | null;
   /** Minutos respecto a la hora del horario: positivo = después, negativo = antes. */
   minutosEntrada: number | null;
   minutosSalida: number | null;
@@ -223,7 +229,7 @@ export interface EvaluacionDia {
 const horas = (minutos: number) => Math.round((minutos / 60) * 100) / 100;
 
 const VACIA: Omit<EvaluacionDia, 'estado' | 'observaciones'> = {
-  horario: null, entradaReal: null, salidaReal: null, minutosEntrada: null, minutosSalida: null, horasReales: null, horasDentroHorario: null,
+  horario: null, entradaReal: null, salidaReal: null, puntualidadEntrada: null, puntualidadSalida: null, minutosEntrada: null, minutosSalida: null, horasReales: null, horasDentroHorario: null,
 };
 
 export interface EntradaEvaluacion {
@@ -265,19 +271,23 @@ export function evaluarDia(x: EntradaEvaluacion): EvaluacionDia {
   }
   if (!dia.trabaja) return { ...con, estado: 'DIA_LIBRE', observaciones: [] };
   if (entradaMin == null && salidaMin == null) {
-    if (x.ahoraMin != null && x.ahoraMin <= e + ajuste.ventanaMin) return { ...comunes, estado: 'PENDIENTE', observaciones: [] };
+    if (x.ahoraMin != null && x.ahoraMin < MEDIODIA_MIN) return { ...comunes, estado: 'PENDIENTE', observaciones: [] };
     return { ...comunes, estado: 'SIN_MARCA', observaciones: [] };
   }
-  if (entradaMin == null || salidaMin == null) {
-    if (entradaMin != null && x.ahoraMin != null && x.ahoraMin <= s + ajuste.ventanaMin) return { ...con, estado: 'EN_CURSO', observaciones: [] };
-    return { ...con, estado: 'INCOMPLETO', observaciones: [] };
-  }
-
   const t = ajuste.toleranciaMin;
+  const puntualidadEntrada = entradaMin != null ? puntualidadDe(entradaMin, e, t) : null;
+  const puntualidadSalida = salidaMin != null ? puntualidadDe(salidaMin, s, t) : null;
+  const juzgado = { ...con, puntualidadEntrada, puntualidadSalida };
+  // Cada marca se juzga por sí sola: un atraso cuenta aunque falte la salida.
   const observaciones: EstadoDia[] = [];
-  if (entradaMin > e + t) observaciones.push('ATRASO');
-  if (salidaMin < s - t) observaciones.push('SALIDA_ANTICIPADA');
-  if (entradaMin < e - t) observaciones.push('ENTRADA_TEMPRANA');
-  if (salidaMin > s + t) observaciones.push('SALIDA_TARDIA');
-  return { ...con, estado: observaciones[0] ?? 'CUMPLE', observaciones };
+  if (puntualidadEntrada === 'ATRASADO') observaciones.push('ATRASO');
+  if (puntualidadSalida === 'MUY_ANTES') observaciones.push('SALIDA_ANTICIPADA');
+  if (puntualidadEntrada === 'MUY_ANTES') observaciones.push('ENTRADA_TEMPRANA');
+  if (puntualidadSalida === 'ATRASADO') observaciones.push('SALIDA_TARDIA');
+  if (entradaMin == null || salidaMin == null) {
+    // Hoy, con la entrada marcada, la salida se puede registrar hasta el final del día.
+    const enCurso = entradaMin != null && x.ahoraMin != null;
+    return { ...juzgado, estado: enCurso ? 'EN_CURSO' : 'INCOMPLETO', observaciones };
+  }
+  return { ...juzgado, estado: observaciones[0] ?? 'CUMPLE', observaciones };
 }

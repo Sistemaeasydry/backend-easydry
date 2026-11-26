@@ -120,11 +120,13 @@ describe('HorariosService (base real)', () => {
     const de = (userId: string, clave: string) => ({ tipo: 'HORARIO_INCIDENCIA' as const, entidadId: ids.lavador2, userId, data: { path: ['clave'], equals: clave } });
     const soloPrueba = [ids.lavador2];
 
-    // 10:30 del 15 de junio: ya pasó la ventana de la entrada (06:00 a 10:00) y no hay marcas
-    expect(await service.revisarIncidencias(new Date('2032-06-15T15:30:00Z'), soloPrueba)).toBe(1);
+    // 10:30 del 15 de junio: todavía puede marcar su entrada, así que no se avisa
+    expect(await service.revisarIncidencias(new Date('2032-06-15T15:30:00Z'), soloPrueba)).toBe(0);
+    // 12:30: ya pasó el mediodía y no hay marcas
+    expect(await service.revisarIncidencias(new Date('2032-06-15T17:30:00Z'), soloPrueba)).toBe(1);
     expect((await env.prisma.notification.findFirst({ where: de(ids.lavador2, '2032-06-15:SIN_MARCA') }))?.titulo).toBe('Día sin marcas');
     await env.esperar(() => env.prisma.notification.findFirst({ where: de(ids.admin, '2032-06-15:SIN_MARCA') }));
-    expect(await service.revisarIncidencias(new Date('2032-06-15T15:35:00Z'), soloPrueba)).toBe(0); // no repite
+    expect(await service.revisarIncidencias(new Date('2032-06-15T17:35:00Z'), soloPrueba)).toBe(0); // no repite
 
     // con entrada y sin salida, ya pasada la ventana de la salida (17:00 más 2 h = 19:00)
     await env.prisma.timbrada.create({

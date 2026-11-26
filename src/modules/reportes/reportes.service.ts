@@ -100,9 +100,10 @@ const nombreDe = (u?: { name?: string | null; lastname?: string | null } | null)
 const titulo = (s?: string | null): string => (s ? `${s.charAt(0).toUpperCase()}${s.slice(1).toLowerCase().replace(/_/g, ' ')}` : '');
 /** Tope de filas persona-día del reporte de timbradas, para que un periodo muy largo no tumbe el servidor. */
 const LIMITE_PERSONA_DIA = 60_000;
+const PUNTUALIDAD_RRHH: Record<string, string> = { A_TIEMPO: 'A tiempo', MUY_ANTES: 'Muy antes', ATRASADO: 'Atrasado' };
 /** Cómo se llama cada estado del día en el reporte de timbradas. */
 const ESTADO_DIA_RRHH: Record<string, string> = {
-  CUMPLE: 'Cumple', ATRASO: 'Atraso', ENTRADA_TEMPRANA: 'Entrada temprana', SALIDA_ANTICIPADA: 'Salida anticipada', SALIDA_TARDIA: 'Salida tardía',
+  CUMPLE: 'A tiempo', ATRASO: 'Atrasado', ENTRADA_TEMPRANA: 'Entrada muy antes', SALIDA_ANTICIPADA: 'Salida muy antes', SALIDA_TARDIA: 'Salida atrasada',
   INCOMPLETO: 'Incompleto', SIN_MARCA: 'Sin marca', DIA_LIBRE: 'Día libre', PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', SIN_HORARIO: 'Sin horario',
   NO_OBLIGATORIO: 'No obligatorio timbrar', REGISTRADO: 'Registrado',
 };
@@ -1535,6 +1536,8 @@ export class ReportesService {
             salida: e.salidaReal ?? '',
             sitio: sitioDelDia.get(`${e.userId}|${e.dia}`) ?? '',
             estado: ESTADO_DIA_RRHH[e.estado] ?? e.estado,
+            estadoEntrada: PUNTUALIDAD_RRHH[e.puntualidadEntrada ?? ''] ?? '',
+            estadoSalida: PUNTUALIDAD_RRHH[e.puntualidadSalida ?? ''] ?? '',
             minutosEntrada: e.minutosEntrada,
             horas: e.horasReales,
             horasHorario: e.horasDentroHorario,
