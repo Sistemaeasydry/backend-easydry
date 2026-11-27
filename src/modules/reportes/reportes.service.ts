@@ -1542,6 +1542,7 @@ export class ReportesService {
             estadoEntrada: PUNTUALIDAD_RRHH[e.puntualidadEntrada ?? ''] ?? '',
             estadoSalida: PUNTUALIDAD_RRHH[e.puntualidadSalida ?? ''] ?? '',
             minutosEntrada: e.minutosEntrada,
+            minutosDespues: e.minutosDespuesSalida,
             horas: e.horasReales,
             horasHorario: e.horasDentroHorario,
           },

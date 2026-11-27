@@ -698,6 +698,7 @@ export const REPORTES: readonly ReporteDef[] = [
       col('estadoSalida', 'Estado salida', 'texto', 10),
       col('estado', 'Estado del día', 'texto', 14),
       col('minutosEntrada', 'Min. vs entrada', 'numero', 8),
+      col('minutosDespues', 'Min. después de salida', 'numero', 8),
       col('horas', 'Horas', 'numero', 6),
       col('horasHorario', 'Horas en horario', 'numero', 8),
     ],

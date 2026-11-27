@@ -129,13 +129,35 @@ describe('resolverMarca: entrada en la mañana y salida en la tarde', () => {
   });
 });
 
+describe('evaluarDia · horas con tolerancia y minutos después de la salida', () => {
+  const dia = { trabaja: true, entrada: '08:00', salida: '17:00' };
+  const ev = (entrada: string, salida: string) => evaluarDia({ dia, ajuste: AJUSTE_POR_DEFECTO, entradaMin: h(entrada), salidaMin: h(salida) });
+
+  it('dentro de los 10 min en ambas marcas cuenta la jornada completa', () => {
+    for (const [e, s] of [['08:07', '16:55'], ['08:10', '16:50'], ['07:50', '17:00']]) {
+      expect(ev(e, s), `${e}-${s}`).toMatchObject({ horasReales: 9, horasDentroHorario: 9, entradaReal: e, salidaReal: s });
+    }
+  });
+
+  it('fuera de los 10 min se cuenta la hora real de esa marca', () => {
+    expect(ev('08:11', '17:00')).toMatchObject({ horasReales: 8.82, horasDentroHorario: 8.82 });
+    expect(ev('08:00', '16:49')).toMatchObject({ horasReales: 8.82, horasDentroHorario: 8.82 });
+  });
+
+  it('muestra todos los minutos después de la salida; pasada la tolerancia suman al tiempo trabajado, no al horario', () => {
+    expect(ev('08:00', '17:07')).toMatchObject({ minutosDespuesSalida: 7, horasReales: 9, horasDentroHorario: 9 });
+    expect(ev('08:00', '17:30')).toMatchObject({ minutosDespuesSalida: 30, horasReales: 9.5, horasDentroHorario: 9 });
+    expect(ev('08:00', '16:55')).toMatchObject({ minutosDespuesSalida: 0 });
+  });
+});
+
 describe('evaluarDia', () => {
   const ev = (entrada: string | null, salida: string | null, extra: Record<string, unknown> = {}) =>
     evaluarDia({ dia: DIA, ajuste: AJUSTE_POR_DEFECTO, entradaMin: entrada ? h(entrada) : null, salidaMin: salida ? h(salida) : null, ...extra });
 
   it('cumple si entra y sale dentro de ±10 min, con las dos cifras de horas', () => {
     const r = ev('08:07', '14:55');
-    expect(r).toMatchObject({ estado: 'CUMPLE', observaciones: [], minutosEntrada: 7, minutosSalida: -5, horasReales: 6.8, horasDentroHorario: 6.8 });
+    expect(r).toMatchObject({ estado: 'CUMPLE', observaciones: [], minutosEntrada: 7, minutosSalida: -5, horasReales: 7, horasDentroHorario: 7, minutosDespuesSalida: 0 });
     expect(ev('07:50', '15:10').estado).toBe('CUMPLE');
   });
 

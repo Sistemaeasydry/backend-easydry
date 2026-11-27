@@ -220,16 +220,18 @@ export interface EvaluacionDia {
   /** Minutos respecto a la hora del horario: positivo = después, negativo = antes. */
   minutosEntrada: number | null;
   minutosSalida: number | null;
-  /** Salida real menos entrada real, en horas. */
+  /** Tiempo trabajado en horas. Una marca dentro de la tolerancia cuenta como la hora exacta del horario. */
   horasReales: number | null;
-  /** Solo el tiempo trabajado dentro del horario, en horas. */
+  /** Lo mismo, contando solo lo que cae dentro del horario. */
   horasDentroHorario: number | null;
+  /** Minutos marcados después de la hora de salida del horario (todos, también dentro de la tolerancia); null sin salida o en día libre. */
+  minutosDespuesSalida: number | null;
 }
 
 const horas = (minutos: number) => Math.round((minutos / 60) * 100) / 100;
 
 const VACIA: Omit<EvaluacionDia, 'estado' | 'observaciones'> = {
-  horario: null, entradaReal: null, salidaReal: null, puntualidadEntrada: null, puntualidadSalida: null, minutosEntrada: null, minutosSalida: null, horasReales: null, horasDentroHorario: null,
+  horario: null, entradaReal: null, salidaReal: null, puntualidadEntrada: null, puntualidadSalida: null, minutosEntrada: null, minutosSalida: null, horasReales: null, horasDentroHorario: null, minutosDespuesSalida: null,
 };
 
 export interface EntradaEvaluacion {
@@ -254,14 +256,19 @@ export function evaluarDia(x: EntradaEvaluacion): EvaluacionDia {
   const e = aMinutos(dia.entrada);
   const s = aMinutos(dia.salida);
   const comunes = { ...base, horario: { entrada: dia.entrada, salida: dia.salida } };
-  const realesMin = entradaMin != null && salidaMin != null && salidaMin > entradaMin ? salidaMin - entradaMin : null;
-  const dentroMin = realesMin != null ? Math.max(0, Math.min(salidaMin as number, s) - Math.max(entradaMin as number, e)) : null;
+  // Para contar horas, una marca dentro de la tolerancia vale como la hora del horario (08:07 cuenta desde las 08:00). La salida
+  // posterior a esa tolerancia cuenta tal cual. La hora real de cada marca se sigue mostrando.
+  const contada = (marca: number, hora: number) => (dia.trabaja && Math.abs(marca - hora) <= ajuste.toleranciaMin ? hora : marca);
+  const tramo = entradaMin != null && salidaMin != null && salidaMin > entradaMin ? { desde: contada(entradaMin, e), hasta: contada(salidaMin, s) } : null;
+  const realesMin = tramo ? Math.max(0, tramo.hasta - tramo.desde) : null;
+  const dentroMin = tramo ? Math.max(0, Math.min(tramo.hasta, s) - Math.max(tramo.desde, e)) : null;
   const con = {
     ...comunes,
     minutosEntrada: entradaMin != null ? entradaMin - e : null,
     minutosSalida: salidaMin != null ? salidaMin - s : null,
     horasReales: realesMin != null ? horas(realesMin) : null,
     horasDentroHorario: dentroMin != null ? horas(dentroMin) : null,
+    minutosDespuesSalida: dia.trabaja && salidaMin != null ? Math.max(0, salidaMin - s) : null,
   };
 
   if (x.obligatoria === false) {
