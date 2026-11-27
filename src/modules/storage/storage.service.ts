@@ -1174,7 +1174,7 @@ export class StorageService implements OnModuleInit {
    * ¿Puede el usuario ver este archivo de RRHH (`rrhh/timbradas/<usuario>/…` o `rrhh/tareas/<usuario>/…`)?
    *  - Su dueño (quien lo subió) siempre.
    *  - Fotos de timbrada: quien tiene `rrhh.timbradas.ver` y la persona fotografiada está en su alcance.
-   *  - Adjuntos de tarea: el responsable y quien asignó la tarea, el administrador, o quien asigna tareas dentro de su alcance.
+   *  - Adjuntos de tarea: el responsable, quien asignó la tarea y el administrador.
    */
   public async puedeVerClaveRrhh(user: any, key: string): Promise<boolean> {
     const limpia = String(key || '').replace(/^(?:thumbs|view)\//i, '');
@@ -1197,13 +1197,11 @@ export class StorageService implements OnModuleInit {
 
     const adjunto = await this.prisma.tareaAdjunto.findFirst({
       where: { key: limpia },
-      select: { tarea: { select: { asignadoAId: true, asignadoPorId: true, asignadoA: ambito } } },
+      select: { tarea: { select: { asignadoAId: true, asignadoPorId: true } } },
     });
     if (!adjunto) return false;
     const { tarea } = adjunto;
-    if (tarea.asignadoAId.toLowerCase() === yo || tarea.asignadoPorId.toLowerCase() === yo) return true;
-    if (tieneFuncion(user, FUNCION.ADMINISTRADOR)) return true;
-    return tienePermiso(user, 'rrhh.tareas.asignar') && personaEnAlcance(alcance, tarea.asignadoA);
+    return tarea.asignadoAId.toLowerCase() === yo || tarea.asignadoPorId.toLowerCase() === yo || tieneFuncion(user, FUNCION.ADMINISTRADOR);
   }
 
   private safeSegment(value: string | undefined, fallback: string): string {

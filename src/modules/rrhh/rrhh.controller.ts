@@ -203,9 +203,17 @@ export class RrhhController {
   @Permiso('rrhh.tareas.asignar')
   @Post('tareas/asignadas')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Tareas que asigné y las de las personas de mi alcance' })
+  @ApiOperation({ summary: 'Tareas que asigné yo' })
   tareasAsignadas(@Body() dto: ListarTareasDto, @CurrentUser() user: any) {
     return this.tareas.asignadas(dto, user);
+  }
+
+  @Permiso('rrhh.tareas.asignar')
+  @Post('tareas/todas')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Todas las tareas (solo Admin y Super Admin, para consulta)' })
+  todasLasTareas(@Body() dto: ListarTareasDto, @CurrentUser() user: any) {
+    return this.tareas.todas(dto, user);
   }
 
   @Permiso('rrhh.tareas.asignar')
@@ -256,7 +264,7 @@ export class RrhhController {
     return this.tareas.reasignar(dto, user);
   }
 
-  /** El responsable, quien asignó, un administrador o quien asigna en su alcance: el servicio decide por tarea. */
+  /** El responsable, quien asignó o un administrador: el servicio decide por tarea. */
   @Permiso('rrhh.tareas.propias', 'rrhh.tareas.asignar')
   @Post('tareas/detalle')
   @HttpCode(HttpStatus.OK)

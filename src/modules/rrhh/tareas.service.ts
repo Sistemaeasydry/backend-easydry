@@ -5,7 +5,6 @@ import { StorageService } from '../storage/storage.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { resolverAlcance } from '../../common/permisos/alcance.js';
 import { FUNCION, tieneFuncion } from '../../common/permisos/funciones.js';
-import { tienePermiso } from '../../common/permisos/capacidades.js';
 import type { AdjuntoTareaDto, CancelarTareaDto, CompletarTareaDto, CrearTareaDto, ListarTareasDto, ReasignarTareaDto, RevisarTareaDto } from './dto/rrhh.dto.js';
 import { MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, NUMERO_TAREA, personaEnAlcance, tareaVencida, whereUsuariosEnAlcance } from './rrhh.reglas.js';
 import { apellidosNombres } from '../../common/utils/nombre-persona.js';
@@ -34,7 +33,9 @@ export interface DatosTareaDeInforme {
 /**
  * Tareas del personal. Toda tarea tiene un solo responsable (obligatorio), salvo las que nacen de una novedad de informe, donde
  * crearla es opcional. Estados: Pendiente → Completada → Revisada, más Cancelada. Asignan quienes tienen `rrhh.tareas.asignar` y
- * solo a personas dentro de su alcance; la revisa quien la asignó (o un administrador).
+ * solo a personas dentro de su alcance. Cada tarea la ven únicamente su responsable y quien la asignó, que es quien le hace
+ * seguimiento y la revisa; ningún otro rol ve las de otros. La excepción es ADMIN y SUPER_ADMIN, que las consultan todas en su
+ * sección aparte, sin poder gestionar las que no asignaron.
  */
 @Injectable()
 export class TareasService {
@@ -50,16 +51,15 @@ export class TareasService {
 
   private esAdmin = (user: any) => tieneFuncion(user, FUNCION.ADMINISTRADOR);
 
-  /** Puede ver la tarea: el responsable, quien la asignó, un administrador, o quien asigna tareas y la persona está en su alcance. */
+  /** Puede ver la tarea: el responsable, quien la asignó y, solo para consultarla, un administrador. */
   private puedeVer(user: any, t: TareaCompleta): boolean {
     const yo = String(user.id);
-    if (t.asignadoAId === yo || t.asignadoPorId === yo || this.esAdmin(user)) return true;
-    return tienePermiso(user, 'rrhh.tareas.asignar') && personaEnAlcance(resolverAlcance(user), t.asignadoA);
+    return t.asignadoAId === yo || t.asignadoPorId === yo || this.esAdmin(user);
   }
 
-  /** Revisa, cancela o reasigna: quien asignó la tarea o un administrador. */
+  /** Revisa, cancela o reasigna: solo quien asignó la tarea. */
   private puedeGestionar(user: any, t: TareaCompleta): boolean {
-    return t.asignadoPorId === String(user.id) || this.esAdmin(user);
+    return t.asignadoPorId === String(user.id);
   }
 
   /** Quien asigna, con la forma que espera `personaEnAlcance` (la región sale de su agencia o de su bodega si no la trae). */
@@ -178,14 +178,22 @@ export class TareasService {
     return this.presentar(tareas);
   }
 
-  /** Tareas que asigné yo y las de las personas de mi alcance (un administrador, todas). */
+  /** Tareas que asigné yo, para darles seguimiento. */
   async asignadas(dto: ListarTareasDto, user: any) {
-    const alcance = resolverAlcance(user);
-    const donde: Prisma.TareaRrhhWhereInput = this.esAdmin(user)
-      ? {}
-      : { OR: [{ asignadoPorId: String(user.id) }, { asignadoA: whereUsuariosEnAlcance(alcance) as Prisma.UserWhereInput }] };
     const tareas = await this.prisma.tareaRrhh.findMany({
-      where: { AND: [donde, this.filtros(dto)] },
+      where: { ...this.filtros(dto), asignadoPorId: String(user.id) },
+      include: INCLUIR_TAREA,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    return this.presentar(tareas);
+  }
+
+  /** Todas las tareas, de cualquier persona: solo para consulta de ADMIN y SUPER_ADMIN. */
+  async todas(dto: ListarTareasDto, user: any) {
+    if (!this.esAdmin(user)) throw new ForbiddenException('Solo un Admin o Super Admin puede ver todas las tareas.');
+    const tareas = await this.prisma.tareaRrhh.findMany({
+      where: this.filtros(dto),
       include: INCLUIR_TAREA,
       orderBy: { createdAt: 'desc' },
       take: 500,
@@ -225,11 +233,10 @@ export class TareasService {
     return personas.map((p) => ({ id: p.id, nombre: apellidosNombres(p), rol: p.role?.namerol ?? '', agencia: p.agencia?.nombre ?? null }));
   }
 
-  /** Tareas Pendientes cuyo responsable ya no está activo: alguien debe reasignarlas. */
+  /** Tareas Pendientes que asigné y cuyo responsable ya no está activo: debo reasignarlas. */
   async sinResponsableActivo(user: any) {
-    const alcance = resolverAlcance(user);
     const tareas = await this.prisma.tareaRrhh.findMany({
-      where: { estado: 'PENDIENTE', asignadoA: { AND: [whereUsuariosEnAlcance(alcance) as Prisma.UserWhereInput, { estado: 0 }] } },
+      where: { estado: 'PENDIENTE', asignadoPorId: String(user.id), asignadoA: { estado: 0 } },
       include: INCLUIR_TAREA,
       orderBy: { createdAt: 'asc' },
       take: 500,
@@ -323,7 +330,7 @@ export class TareasService {
 
   async revisar(dto: RevisarTareaDto, user: any) {
     const t = await this.cargar(dto.id);
-    if (!this.puedeGestionar(user, t)) throw new ForbiddenException('Solo quien asignó la tarea (o un administrador) puede revisarla.');
+    if (!this.puedeGestionar(user, t)) throw new ForbiddenException('Solo quien asignó la tarea puede revisarla.');
     if (t.estado !== 'COMPLETADA') throw new BadRequestException('Solo se puede revisar una tarea Completada.');
     if (dto.accion === 'APROBAR') {
       await this.prisma.tareaRrhh.update({
@@ -345,7 +352,7 @@ export class TareasService {
 
   async cancelar(dto: CancelarTareaDto, user: any) {
     const t = await this.cargar(dto.id);
-    if (!this.puedeGestionar(user, t)) throw new ForbiddenException('Solo quien asignó la tarea (o un administrador) puede cancelarla.');
+    if (!this.puedeGestionar(user, t)) throw new ForbiddenException('Solo quien asignó la tarea puede cancelarla.');
     if (t.estado !== 'PENDIENTE') throw new BadRequestException('Solo se puede cancelar una tarea Pendiente.');
     const motivo = dto.motivo?.trim() || null;
     await this.prisma.tareaRrhh.update({
@@ -358,7 +365,7 @@ export class TareasService {
 
   async reasignar(dto: ReasignarTareaDto, user: any) {
     const t = await this.cargar(dto.id);
-    if (!this.puedeGestionar(user, t)) throw new ForbiddenException('Solo quien asignó la tarea (o un administrador) puede reasignarla.');
+    if (!this.puedeGestionar(user, t)) throw new ForbiddenException('Solo quien asignó la tarea puede reasignarla.');
     if (t.estado !== 'PENDIENTE') throw new BadRequestException('Solo se puede reasignar una tarea Pendiente.');
     if (dto.asignadoAId === t.asignadoAId) throw new BadRequestException('La tarea ya está asignada a esa persona.');
     const nueva = await this.validarResponsable(user, dto.asignadoAId);

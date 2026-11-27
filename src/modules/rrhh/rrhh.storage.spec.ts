@@ -120,9 +120,9 @@ describe('archivos de RRHH: subida y acceso (base real)', () => {
       }
     });
 
-    it('un administrador y quien asigna dentro del alcance también', async () => {
+    it('un administrador también; quien asigna en su alcance, si no asignó la tarea, no', async () => {
       expect(await puede('admin', keyRespuesta)).toBe(true);
-      expect(await puede('supervisor', keyRespuesta)).toBe(true);
+      expect(await puede('supervisor', keyRespuesta)).toBe(false);
     });
 
     it('un compañero, otro líder o alguien de otra región, no', async () => {

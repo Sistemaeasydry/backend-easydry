@@ -161,13 +161,12 @@ describe('TareasService (base real)', () => {
       expect(aviso.userId).toBe(ids.lavador);
     });
 
-    it('un administrador también revisa cualquier tarea', async () => {
+    it('un administrador no revisa las tareas que asignó otra persona', async () => {
       const t = await crear('lider', 'lavador');
       await completar(t.id);
-      expect((await service.revisar({ id: t.id, accion: 'APROBAR' }, actores.superAdmin)).estado).toBe('REVISADA');
-      const otra = await crear('lider', 'lavador');
-      await completar(otra.id);
-      expect((await service.revisar({ id: otra.id, accion: 'APROBAR' }, actores.admin)).estado).toBe('REVISADA');
+      for (const quien of ['admin', 'superAdmin']) {
+        await expect(service.revisar({ id: t.id, accion: 'APROBAR' }, actores[quien]), quien).rejects.toThrow(/Solo quien asignó/);
+      }
     });
 
     it('otro con permiso de asignar, que no asignó la tarea, no la revisa', async () => {
@@ -199,7 +198,7 @@ describe('TareasService (base real)', () => {
   });
 
   describe('cancelar y reasignar', () => {
-    it('solo una Pendiente se cancela, por quien asignó o un administrador, y se avisa', async () => {
+    it('solo una Pendiente se cancela, por quien asignó, y se avisa', async () => {
       const t = await crear('lider', 'lavador');
       await expect(service.cancelar({ id: t.id }, actores.supervisor)).rejects.toThrow(/Solo quien asignó/);
       const c = await service.cancelar({ id: t.id, motivo: 'Ya no hace falta' }, actores.lider);
@@ -212,7 +211,7 @@ describe('TareasService (base real)', () => {
       await completar(completada.id);
       await expect(service.cancelar({ id: completada.id }, actores.lider)).rejects.toThrow('Solo se puede cancelar una tarea Pendiente.');
       const otra = await crear('lider', 'lavador');
-      expect((await service.cancelar({ id: otra.id }, actores.admin)).estado).toBe('CANCELADA');
+      await expect(service.cancelar({ id: otra.id }, actores.admin)).rejects.toThrow(/Solo quien asignó/);
     });
 
     it('reasignar pasa la tarea a otra persona de mi alcance, deja historial y avisa a ambos', async () => {
@@ -262,26 +261,36 @@ describe('TareasService (base real)', () => {
       expect((await service.mias({ estado: 'REVISADA' }, actores.lavador2)).every((x) => x.estado === 'REVISADA')).toBe(true);
     });
 
-    it('asignadas: las que asigné y las de mi alcance; el administrador, todas', async () => {
+    it('asignadas: solo las que asigné yo, sea cual sea mi rol', async () => {
       const t = await crear('lider', 'lavador');
       const delVecino = await crear('liderVecino', 'lavadorVecino');
       const delLider = (await service.asignadas({}, actores.lider)).map((x) => x.id);
       expect(delLider).toContain(t.id);
       expect(delLider).not.toContain(delVecino.id);
-      const delSupervisor = (await service.asignadas({}, actores.supervisor)).map((x) => x.id);
-      expect(delSupervisor).toEqual(expect.arrayContaining([t.id, delVecino.id]));
-      const delAdmin = (await service.asignadas({}, actores.admin)).map((x) => x.id);
-      expect(delAdmin).toEqual(expect.arrayContaining([t.id, delVecino.id]));
-      const lejano = (await service.asignadas({}, actores.supervisorLejano)).map((x) => x.id);
-      expect(lejano).not.toContain(t.id);
+      for (const quien of ['supervisor', 'admin', 'superAdmin', 'lavador', 'supervisorLejano']) {
+        const lista = (await service.asignadas({}, actores[quien])).map((x) => x.id);
+        expect(lista, quien).not.toContain(t.id);
+        expect(lista, quien).not.toContain(delVecino.id);
+      }
     });
 
-    it('detalle: el responsable, quien asignó, el administrador y quien asigna en su alcance; nadie más', async () => {
+    it('todas: solo Admin y Super Admin ven las tareas de cualquier persona', async () => {
       const t = await crear('lider', 'lavador');
-      for (const quien of ['lavador', 'lider', 'admin', 'superAdmin', 'supervisor']) {
+      const delVecino = await crear('liderVecino', 'lavadorVecino');
+      for (const quien of ['admin', 'superAdmin']) {
+        expect((await service.todas({}, actores[quien])).map((x) => x.id), quien).toEqual(expect.arrayContaining([t.id, delVecino.id]));
+      }
+      for (const quien of ['supervisor', 'lider', 'lavador']) {
+        await expect(service.todas({}, actores[quien]), quien).rejects.toThrow('Solo un Admin o Super Admin');
+      }
+    });
+
+    it('detalle: el responsable, quien asignó y el administrador; nadie más', async () => {
+      const t = await crear('lider', 'lavador');
+      for (const quien of ['lavador', 'lider', 'admin', 'superAdmin']) {
         expect((await service.detalle(t.id, actores[quien])).id, quien).toBe(t.id);
       }
-      for (const quien of ['lavador2', 'liderVecino', 'supervisorLejano', 'lavadorLejano']) {
+      for (const quien of ['supervisor', 'lavador2', 'liderVecino', 'supervisorLejano', 'lavadorLejano']) {
         await expect(service.detalle(t.id, actores[quien]), quien).rejects.toThrow('No tienes acceso a esta tarea.');
       }
       await expect(service.detalle('00000000-0000-4000-8000-000000000000', actores.admin)).rejects.toThrow('La tarea no existe.');
