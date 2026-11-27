@@ -45,6 +45,7 @@ import {
   puntajeMaximoCategoria,
   semaforoDe,
   variacion,
+  whereBorrador5sPropio,
   type Formato5s,
   type FormatoId,
 } from './auditoria5s.reglas.js';
@@ -107,11 +108,15 @@ export class Auditoria5sService {
 
   // ───────────────────────── Alcance y permisos ─────────────────────────
 
-  /** Auditorías del ámbito del usuario; quien no puede auditar (líder, lavador, pulidor) ve solo las guardadas. */
+  /**
+   * Auditorías del ámbito del usuario. Un borrador solo lo ve quien lo creó, sea cual sea su rol; quien no puede auditar
+   * (líder, lavador, pulidor) ve solo las guardadas.
+   */
   private whereVisible(user: any): Record<string, unknown> {
     return combinarWhere(
       { deletedAt: null },
       whereSobreAgencia(resolverAlcance(user), 'agenciaId', 'agencia'),
+      whereBorrador5sPropio(user),
       this.soloResultado(user) ? { estado: { in: [...ESTADOS_RESULTADO_5S] } } : undefined,
     );
   }
@@ -123,12 +128,12 @@ export class Auditoria5sService {
   private permisosSobre(a: { estado: string; auditorId: string }, user: any) {
     const esAutor = a.auditorId === user?.id;
     const verifica = tienePermiso(user, 'inspecciones.verificar');
-    const editable = EDITABLES.includes(a.estado) && ((esAutor && tienePermiso(user, 'inspecciones.crear')) || verifica);
+    const editable = EDITABLES.includes(a.estado) && esAutor && (tienePermiso(user, 'inspecciones.crear') || verifica);
     const final = (ESTADOS_RESULTADO_5S as readonly string[]).includes(a.estado);
     return {
       puedeEditar: editable,
       puedeGuardar: editable,
-      puedeEliminar: EDITABLES.includes(a.estado) && tienePermiso(user, 'inspecciones.eliminar') && (esAutor || verifica),
+      puedeEliminar: EDITABLES.includes(a.estado) && tienePermiso(user, 'inspecciones.eliminar') && esAutor,
       puedeSeguimiento: final && tienePermiso(user, 'inspecciones.acciones'),
       puedeVerificar: final && verifica,
     };

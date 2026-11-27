@@ -80,6 +80,11 @@ export const puedePasarA = (desde: string, hacia: EstadoInforme): boolean =>
 /** El contenido solo se edita mientras es borrador: de ahí en adelante lo aprobado no cambia. */
 export const esEditable = (estado: string): boolean => estado === 'BORRADOR';
 
+/** Un borrador es privado: solo lo ve quien lo elaboró. Lo usan los informes y los reportes. */
+export const whereBorradorPropio = (user: { id?: unknown } | null | undefined) => ({
+  OR: [{ estado: { not: 'BORRADOR' } }, { inspectorId: String(user?.id ?? '') }],
+});
+
 /** Periodo AAAA-MM de una fecha AAAA-MM-DD. */
 export const periodoDe = (fecha: string): string => fecha.slice(0, 7);
 

@@ -116,7 +116,7 @@ export const CATALOGO_PERMISOS = [
   def('Auditorías', 'informes.crear', 'Crear y editar informes de inspección', 'Hacer inspecciones: crear informes, editar sus borradores, registrar novedades, actividades y planes de acción, adjuntar evidencias, firmarlos y guardarlos de forma definitiva.'),
   def('Auditorías', 'informes.firmar', 'Registrar observaciones y calificación del informe', 'Registrar las observaciones del jefe de taller y la calificación del servicio de un informe de inspección, y validar el sello del jefe de taller con su contraseña.'),
   def('Auditorías', 'informes.seguimiento', 'Dar seguimiento a los planes de acción', 'Actualizar el estado y la evidencia de cumplimiento de los planes de acción de un informe.'),
-  def('Auditorías', 'informes.administrar', 'Editar y eliminar informes de otros', 'Editar y eliminar los borradores de informes que elaboró otra persona dentro de su ámbito.'),
+  def('Auditorías', 'informes.administrar', 'Administrar informes de inspección', 'Gestionar los usuarios adjuntos de un informe al revisarlo (Admin). Los borradores son privados: solo los ve, edita y elimina quien los elaboró.'),
   def('Auditorías', 'informes.aprobar', 'Aprobar informes y firmar la recepción', 'Aprobar un informe ya guardado firmando la recepción en pantalla. Solo Admin y Super Admin.'),
   def('Auditorías', 'informes.eliminar', 'Eliminar informes en borrador', 'Eliminar (con registro) un informe que aún es borrador.'),
   def('Auditorías', 'inspecciones.ver', 'Ver auditorías 5S', 'Resultados de las auditorías 5S de su ámbito. Quien no puede auditar solo ve las guardadas de su agencia.'),

@@ -411,3 +411,8 @@ export const codigoAccion = (codigoAuditoria: string, criterio: number): string 
 export function variacion(actual: number, anterior: number | null | undefined): number | null {
   return typeof anterior === 'number' ? actual - anterior : null;
 }
+
+/** Un borrador es privado: solo lo ve quien hizo la auditoría. Lo usan las auditorías y los reportes. */
+export const whereBorrador5sPropio = (user: { id?: unknown } | null | undefined) => ({
+  OR: [{ estado: { not: 'BORRADOR' } }, { auditorId: String(user?.id ?? '') }],
+});

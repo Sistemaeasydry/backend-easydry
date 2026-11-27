@@ -50,7 +50,7 @@ const ROLES_SIN_KITS: string[] = [];
 /**
  * Auditorías. Pueden auditar (crear informes de inspección, firmarlos y verlos dentro de su ámbito) todos los roles menos el líder
  * de bahía (LIDER y su reemplazo BACKUP), el lavador y el pulidor, que solo ven el resultado de su inspección 5S y sus informes.
- * Editar y eliminar los borradores de otros, y verificar las acciones correctivas, es de quien administra: ADMIN, SUPER_ADMIN y SUPERVISOR.
+ * Eliminar borradores (solo los propios: son privados) y verificar las acciones correctivas es de quien administra: ADMIN, SUPER_ADMIN y SUPERVISOR.
  */
 const ROLES_SOLO_VEN_AUDITORIA = ['LIDER', 'BACKUP', 'AUXILIAR', 'LAVADOR', 'PULIDOR'];
 /** El aprobador solo aprueba servicios: no tiene informes de inspección ni auditorías 5S. */

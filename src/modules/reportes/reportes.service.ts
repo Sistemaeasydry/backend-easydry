@@ -1,3 +1,5 @@
+import { whereBorradorPropio } from '../auditorias/informes.reglas.js';
+import { whereBorrador5sPropio } from '../auditorias/auditoria5s.reglas.js';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -1424,7 +1426,7 @@ export class ReportesService {
     const desde = new Date(`${ctx.rango!.desde}T00:00:00Z`);
     const hasta = new Date(`${ctx.rango!.hasta}T00:00:00Z`);
     const filas = await this.prisma.informeInspeccion.findMany({
-      where: { deletedAt: null, agenciaId: { in: ctx.ids }, fecha: { gte: desde, lte: hasta }, ...(ctx.dto.estado ? { estado: ctx.dto.estado } : {}) },
+      where: { deletedAt: null, agenciaId: { in: ctx.ids }, fecha: { gte: desde, lte: hasta }, ...(ctx.dto.estado ? { estado: ctx.dto.estado } : {}), AND: [whereBorradorPropio(ctx.user)] },
       include: { inspector: { select: { name: true, lastname: true } } },
       orderBy: [{ fecha: 'asc' }, { numero: 'asc' }],
     });
@@ -1448,6 +1450,7 @@ export class ReportesService {
         fecha: { gte: desde, lte: hasta },
         ...(ctx.dto.estado ? { estado: ctx.dto.estado } : {}),
         ...(ctx.dto.semaforo ? { semaforo: ctx.dto.semaforo } : {}),
+        AND: [whereBorrador5sPropio(ctx.user)],
       },
       include: { auditor: { select: { name: true, lastname: true } } },
       orderBy: [{ fecha: 'asc' }, { codigo: 'asc' }],

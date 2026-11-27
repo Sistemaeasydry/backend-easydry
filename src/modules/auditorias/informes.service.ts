@@ -41,6 +41,7 @@ import {
   esEditable,
   esImagenDataUrl,
   estadoPlanEfectivo,
+  whereBorradorPropio,
   faltantesParaGuardar,
   formatearNumero,
   huellaContenido,
@@ -84,14 +85,15 @@ export class InformesInspeccionService {
   // ───────────────────────── Alcance y permisos sobre un informe ─────────────────────────
 
   /**
-   * Qué informes ve el usuario: los de su ámbito (país, región o agencia) que no estén eliminados. Quien no puede auditar
-   * (líder, lavador, pulidor) ve solo el resultado: los informes ya guardados.
+   * Qué informes ve el usuario: los de su ámbito (país, región o agencia) que no estén eliminados. Un borrador solo lo ve quien
+   * lo elaboró, sea cual sea su rol. Quien no puede auditar (líder, lavador, pulidor) ve solo el resultado: los informes ya guardados.
    */
   private whereVisible(user: any): Record<string, unknown> {
     const alcance = resolverAlcance(user);
     return combinarWhere(
       { deletedAt: null },
       whereSobreAgencia(alcance, 'agenciaId', 'agencia'),
+      whereBorradorPropio(user),
       this.soloResultado(user) ? { estado: { in: [...ESTADOS_RESULTADO] } } : undefined,
     );
   }
@@ -109,8 +111,8 @@ export class InformesInspeccionService {
     const esAutor = i.inspectorId === user?.id;
     const administra = tienePermiso(user, 'informes.administrar');
     const crea = tienePermiso(user, 'informes.crear');
-    // Un informe es editable solo mientras es borrador, y por quien lo elaboró (o quien administra los de otros).
-    const puedeEditar = esEditable(i.estado) && ((esAutor && crea) || administra);
+    // Un informe es editable solo mientras es borrador, y solo por quien lo elaboró (nadie más lo ve).
+    const puedeEditar = esEditable(i.estado) && esAutor && (crea || administra);
     // Adjuntar usuarios: quien elabora el informe y quien lo revisa (Admin) hasta que se aprueba; ya aprobado solo un Admin puede agregar más.
     const revisa = this.esAdmin(user) && (tienePermiso(user, 'informes.aprobar') || administra);
     const gestionaAdjuntos = crea && ((esAutor && crea) || revisa);
@@ -121,7 +123,7 @@ export class InformesInspeccionService {
       puedeGuardar: puedeEditar,
       puedeCalificar: puedeEditar && tienePermiso(user, 'informes.firmar'),
       puedeFirmar: puedeEditar,
-      puedeEliminar: esEditable(i.estado) && tienePermiso(user, 'informes.eliminar') && (esAutor || administra),
+      puedeEliminar: esEditable(i.estado) && tienePermiso(user, 'informes.eliminar') && esAutor,
       puedeSeguimiento: i.estado === 'GUARDADO' && tienePermiso(user, 'informes.seguimiento'),
       // Aprobar (y firmar la recepción) es solo de un Admin o Super Admin, y solo de un informe guardado que aún no se aprobó.
       puedeAprobar: i.estado === 'GUARDADO' && !i.aprobadoEn && this.esAdmin(user) && tienePermiso(user, 'informes.aprobar'),

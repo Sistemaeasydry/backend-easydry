@@ -131,7 +131,7 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
 
     it('no se guarda sin calificación; un borrador ajeno no se edita', async () => {
       await expect(informes.guardar(id, u.aprobador)).rejects.toThrow(/calificación/);
-      await expect(informes.update({ ...base(), id, calificacion: 'BUENO' }, u.tecnico)).rejects.toThrow(/Solo quien elaboró/);
+      await expect(informes.update({ ...base(), id, calificacion: 'BUENO' }, u.tecnico)).rejects.toThrow(/No existe/);
     });
 
     it('se guarda con novedades, calificación y observaciones; sin los permisos de calificar no se cambian', async () => {
@@ -145,11 +145,12 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
       expect(d.planes[0].fechaCompromiso).toBe(new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10));
     });
 
-    it('antes de guardarse, el líder y el lavador no lo ven; quien audita sí, dentro de su alcance', async () => {
-      await expect(informes.detail(id, u.lider)).rejects.toThrow(/fuera de tu alcance|No existe/);
-      expect((await informes.list({ pageSize: 50 } as never, u.lider)).items.map((i: any) => i.id)).not.toContain(id);
-      expect((await informes.list({ pageSize: 50 } as never, u.tecnico)).items.map((i: any) => i.id)).toContain(id);
-      expect((await informes.list({ pageSize: 50 } as never, u.pulidor)).items.map((i: any) => i.id)).not.toContain(id);
+    it('un borrador solo lo ve quien lo elaboró, tampoco quien administra o audita en el mismo alcance', async () => {
+      expect((await informes.list({ pageSize: 50 } as never, u.aprobador)).items.map((i: any) => i.id)).toContain(id);
+      for (const clave of ['lider', 'tecnico', 'supervisor', 'admin', 'pulidor']) {
+        await expect(informes.detail(id, u[clave]), clave).rejects.toThrow(/fuera de tu alcance|No existe/);
+        expect((await informes.list({ pageSize: 50 } as never, u[clave])).items.map((i: any) => i.id), clave).not.toContain(id);
+      }
     });
 
     it('el sello: una contraseña incorrecta no habilita; con la correcta queda validado con su nombre y logo', async () => {
@@ -304,7 +305,7 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
 
     it('no se guarda sin las firmas de responsable, taller y líder; la recepción no se firma aquí', async () => {
       await expect(informes.guardar(id, u.aprobador)).rejects.toThrow(/firma de líder de bahía/);
-      await expect(informes.guardar(id, u.tecnico)).rejects.toThrow(/Solo quien elaboró/);
+      await expect(informes.guardar(id, u.tecnico)).rejects.toThrow(/No existe/);
       await expect(informes.firmar({ informeId: id, tipo: 'RECEPCION', nombre: 'Rosa Gil', imagen: PNG }, u.aprobador)).rejects.toThrow(/Admin o Super Admin/);
       await informes.firmar({ informeId: id, tipo: 'LIDER_BAHIA', nombre: 'Luis Paz', imagen: PNG }, u.aprobador);
       const guardado = await informes.guardar(id, u.aprobador);
@@ -364,7 +365,7 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
       // Un borrador no se aprueba.
       const borrador = await informes.create(base(), u.aprobador);
       rastrearInforme(borrador.id);
-      await expect(informes.aprobar({ informeId: borrador.id, imagen: PNG }, u.admin)).rejects.toThrow(/ya guardado/);
+      await expect(informes.aprobar({ informeId: borrador.id, imagen: PNG }, u.admin)).rejects.toThrow(/No existe/);
       expect((await informes.list({ pageSize: 50 } as never, u.admin)).items.find((i: any) => i.id === id)?.aprobado).toBe(true);
     });
 
@@ -417,8 +418,11 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
       const borrador = await informes.create(base(), u.aprobador);
       rastrearInforme(borrador.id);
       await expect(informes.eliminar(borrador.id, u.aprobador)).rejects.toThrow(); // el inspector no tiene permiso de eliminar
-      expect((await informes.eliminar(borrador.id, u.supervisor)).success).toBe(true);
-      await expect(informes.detail(borrador.id, u.admin)).rejects.toThrow();
+      await expect(informes.eliminar(borrador.id, u.supervisor)).rejects.toThrow(/No existe/); // el borrador es ajeno
+      const propio = await informes.create(base(), u.supervisor);
+      rastrearInforme(propio.id);
+      expect((await informes.eliminar(propio.id, u.supervisor)).success).toBe(true);
+      await expect(informes.detail(propio.id, u.supervisor)).rejects.toThrow();
     });
 
     it('el resumen cuenta solo lo que el usuario ve', async () => {
@@ -476,9 +480,12 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
       await expect(a5s.guardar(id, u.aprobador)).rejects.toThrow(/faltan por evaluar 8/);
     });
 
-    it('antes de guardarse, el líder y el lavador no la ven', async () => {
-      await expect(a5s.detail(id, u.lider)).rejects.toThrow();
-      expect((await a5s.list({ pageSize: 50 } as never, u.lavador)).items.map((i: any) => i.id)).not.toContain(id);
+    it('un borrador solo lo ve quien lo creó, tampoco quien administra o audita en el mismo alcance', async () => {
+      expect((await a5s.list({ pageSize: 50 } as never, u.aprobador)).items.map((i: any) => i.id)).toContain(id);
+      for (const clave of ['lider', 'lavador', 'tecnico', 'supervisor', 'admin']) {
+        await expect(a5s.detail(id, u[clave]), clave).rejects.toThrow(/fuera de tu alcance|No existe/);
+        expect((await a5s.list({ pageSize: 50 } as never, u[clave])).items.map((i: any) => i.id), clave).not.toContain(id);
+      }
     });
 
     it('rechaza respuestas que no existen en el formato', async () => {
@@ -621,11 +628,14 @@ describe('auditorías (informes de inspección y 5S) — base real', () => {
       });
     });
 
-    it('un borrador se elimina solo con permiso; el resumen cuenta lo que cada usuario ve', async () => {
+    it('un borrador lo elimina solo su creador y con permiso; el resumen cuenta lo que cada usuario ve', async () => {
       const b = await a5s.create({ agenciaId: ag.A.id, area: 'ASPIRADO' }, u.aprobador);
       rastrearAuditoria(b.id);
       await expect(a5s.eliminar(b.id, u.aprobador)).rejects.toThrow();
-      expect((await a5s.eliminar(b.id, u.supervisor)).success).toBe(true);
+      await expect(a5s.eliminar(b.id, u.supervisor)).rejects.toThrow(/No existe/); // el borrador es ajeno
+      const propio = await a5s.create({ agenciaId: ag.A.id, area: 'ASPIRADO' }, u.supervisor);
+      rastrearAuditoria(propio.id);
+      expect((await a5s.eliminar(propio.id, u.supervisor)).success).toBe(true);
       const r = await a5s.resumen({} as never, u.lavador);
       expect(r.realizadas).toBeGreaterThanOrEqual(3);
       expect(r.agenciasVerde + r.agenciasAmarillo + r.agenciasRojo).toBe(1);

@@ -2421,7 +2421,8 @@ this.federados.count('servicioLavado', {
         where: { estado: 'GUARDADA', deletedAt: null, porcentaje: { not: null }, agenciaId: { in: ids }, fecha: { gte: desde, lte: hasta } },
         select: { agenciaId: true, porcentaje: true, semaforo: true, fecha: true },
       }),
-      this.prisma.informePlanAccion.count({ where: { agenciaId: { in: ids }, estado: { in: ['PENDIENTE', 'EN_PROCESO'] } } }),
+      // Los planes de un borrador no cuentan: el borrador es privado de quien lo elabora.
+      this.prisma.informePlanAccion.count({ where: { agenciaId: { in: ids }, estado: { in: ['PENDIENTE', 'EN_PROCESO'] }, informe: { estado: 'GUARDADO', deletedAt: null } } }),
     ]);
 
     const estrellasInf = informes.map((i) => ({ ...i, estrellas: estrellasDeInforme(i.calificacion) }));
